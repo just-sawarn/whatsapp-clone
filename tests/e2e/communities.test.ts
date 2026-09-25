@@ -12,6 +12,9 @@ import {
   type Person,
 } from './helpers'
 
+const expectedOrigin =
+  process.env.E2E_MODE === 'prod' ? 'https://codespaces.online' : APP
+
 let browser: Browser
 let alice: Person
 let bob: Person
@@ -159,6 +162,10 @@ describe('communities', () => {
     await page.getByRole('button', { name: 'Community options' }).click()
     await page.getByRole('menuitem', { name: 'Invite link' }).click()
     inviteLink = await page.getByLabel('Invite link').inputValue()
+    // Invite links use the configured public address in production builds, and the current one in development.
+    expect(inviteLink.startsWith(`${expectedOrigin}/communities/join/`)).toBe(
+      true,
+    )
     expect(inviteLink).toMatch(/\/communities\/join\/[0-9a-f]{24}$/)
     await shot(page, '24-invite')
     await page.keyboard.press('Escape')

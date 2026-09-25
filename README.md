@@ -59,12 +59,18 @@ npm run dev
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+# public address of the app, used in emailed links and community invite links (see below)
+VITE_APP_URL=https://codespaces.online
 # optional
 VITE_VAPID_PUBLIC_KEY=
 VITE_TURN_URL=turn:turn.example.com:3478
 VITE_TURN_USERNAME=
 VITE_TURN_CREDENTIAL=
 ```
+
+**App address.** `VITE_APP_URL` is the public address of the app. It is used for the links that leave it: the email-verification and password-reset redirects, and community invite links. If it is not set, the address the app is open on is used (fine for local development; with it set in `.env`, links generated in development also point at that address). It must be `https` (plain `http` is accepted only for `localhost`) and is reduced to its origin. Like all `VITE_*` values it is fixed at build time, so rebuild after changing it.
+
+For verification and reset emails to land there, allow the address in Supabase → Authentication → URL Configuration: set **Site URL** to `https://codespaces.online` and add `https://codespaces.online/**` to **Redirect URLs**. Supabase ignores a redirect that is not on that list and falls back to the Site URL.
 
 Never put a Supabase service-role key in the front end. The anon key is meant for browsers; Row Level Security protects the data.
 

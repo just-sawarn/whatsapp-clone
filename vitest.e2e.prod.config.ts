@@ -12,6 +12,7 @@ export default defineConfig({
       'tests/e2e/media.test.ts',
       'tests/e2e/consoleHygiene.test.ts',
       'tests/e2e/sounds.test.ts',
+      'tests/e2e/appUrl.test.ts',
       'tests/e2e/serviceWorker.test.ts',
     ],
     environment: 'node',

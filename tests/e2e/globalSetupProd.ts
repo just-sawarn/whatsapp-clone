@@ -39,8 +39,14 @@ function shippedCsp(): string {
  */
 export async function setup() {
   await startProxy()
+  // Vitest loads the developer's real .env into this process. The tests must not depend on it (it holds real
+  // project keys and a production app URL), so every VITE_* value is dropped before the harness sets its own.
+  for (const key of Object.keys(process.env))
+    if (key.startsWith('VITE_')) delete process.env[key]
   process.env.VITE_SUPABASE_URL = `http://localhost:${PROXY_PORT}`
   process.env.VITE_SUPABASE_ANON_KEY = 'test-anon-key'
+  // The address production links (email redirects, invite links) must use.
+  process.env.VITE_APP_URL = 'https://codespaces.online'
   const outDir = mkdtempSync(join(tmpdir(), 'wa-e2e-dist-'))
   // Vitest sets NODE_ENV=test, which Vite would inherit and produce a development-mode bundle. Force a real
   // production build, then restore the variable for the rest of the run.

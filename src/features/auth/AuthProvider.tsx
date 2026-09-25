@@ -23,6 +23,7 @@ import {
   unlockStoredIdentity,
   type IdentityState,
 } from '../../lib/crypto/keyStore'
+import { appUrl } from '../../lib/appUrl'
 import { clearCache } from '../../lib/messageCache'
 import {
   clearLogin,
@@ -238,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: appUrl() },
       })
       if (error) {
         setAuthError(messageOf(error))
@@ -259,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: appUrl() },
       })
       if (error) setAuthError(messageOf(error))
       return !error
@@ -274,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false
     }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl()}/reset-password`,
     })
     if (error) setAuthError(messageOf(error))
     return !error

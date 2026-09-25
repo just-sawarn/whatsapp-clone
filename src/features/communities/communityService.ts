@@ -1,3 +1,4 @@
+import { appUrl } from '../../lib/appUrl'
 import { isMissingFunctionError, MIGRATIONS_HINT } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
 
@@ -221,9 +222,6 @@ export function parseInviteCode(input: string): string | null {
   return inviteCodePattern.test(candidate) ? candidate : null
 }
 
-export function inviteUrl(
-  code: string,
-  origin = window.location.origin,
-): string {
+export function inviteUrl(code: string, origin = appUrl()): string {
   return `${origin}/communities/join/${code}`
 }
