@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -v -E '\\\\.\\(png|jpg|svg|ico|woff2?\\)$')"
+      "Bash(grep -v -E '\\\\.\\(png|jpg|svg|ico|woff2?\\)$')",
+      "Bash(sed -i 's|^for file in supabase/tests/\\\\[1-9\\\\]\\\\*.sql; do|shopt -s nullglob\\\\nfor file in supabase/tests/[1-9]*.sql; do|' scripts/test-db.sh)",
+      "Bash(timeout 300 scripts/test-db.sh)",
+      "Bash(scripts/test-db.sh)",
+      "Bash(grep -v -E \"^\\(\\\\\\(|-|  *|$\\)\")"
     ]
   }
 }

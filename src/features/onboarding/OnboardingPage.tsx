@@ -1,110 +1,178 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { motion } from 'framer-motion'
-import { Check, ChevronLeft, ChevronRight, LoaderCircle, ShieldCheck, UserRound } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Logo } from '../../components/ui/Logo'
+import { getProfile } from '../../lib/profile'
+import { keys } from '../../lib/queryKeys'
 import { useAuth } from '../auth/AuthContext'
-import { createProfile, isUsernameAvailable } from '../../lib/profile'
+import { useCurrentUserId } from '../auth/useCurrentUser'
+import { AboutStep } from './steps/AboutStep'
+import { DoneStep } from './steps/DoneStep'
+import { EncryptionStep } from './steps/EncryptionStep'
+import { PermissionsStep } from './steps/PermissionsStep'
+import { ProfileStep } from './steps/ProfileStep'
+import { UsernameStep } from './steps/UsernameStep'
+import {
+  stepOrder,
+  useOnboardingState,
+  type OnboardingStep,
+} from './useOnboardingState'
 
-type OnboardingData = { displayName: string; username: string; about: string }
-type Availability = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
-const storageKey = 'whatsapp-clone:onboarding'
-const initialData: OnboardingData = { displayName: '', username: '', about: 'Hey there! I am using WhatsApp clone.' }
+const LABELS: Record<OnboardingStep, string> = {
+  profile: 'Profile',
+  username: 'Username',
+  about: 'About',
+  permissions: 'Permissions',
+  keys: 'Encryption',
+  done: 'Done',
+}
 
+/** Multi-step, keyboard-navigable setup. Progress is persisted so a refresh does not lose it. */
 export default function OnboardingPage() {
-  const { user, initializeEncryption, signOut } = useAuth()
+  const userId = useCurrentUserId()
+  const { signOut } = useAuth()
   const navigate = useNavigate()
-  const [step, setStep] = useState(() => Number(localStorage.getItem(`${storageKey}:step`) ?? 0))
-  const [data, setData] = useState<OnboardingData>(() => {
-    const saved = localStorage.getItem(storageKey)
-    if (!saved) return initialData
-    try { return { ...initialData, ...(JSON.parse(saved) as Partial<OnboardingData>) } } catch { return initialData }
+  const queryClient = useQueryClient()
+  const { state, save, clear } = useOnboardingState(userId)
+  const [direction, setDirection] = useState(1)
+  const [notice, setNotice] = useState<string | null>(null)
+  const container = useRef<HTMLDivElement>(null)
+  const { data: existingProfile } = useQuery({
+    queryKey: keys.profile(userId),
+    queryFn: () => getProfile(userId),
+    staleTime: 60_000,
   })
-  const [availability, setAvailability] = useState<Availability>('idle')
-  const [saving, setSaving] = useState(false)
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const index = stepOrder.indexOf(state.step)
+  const progress =
+    ((index + (state.step === 'done' ? 1 : 0)) / (stepOrder.length - 1)) * 100
 
+  const goTo = (step: OnboardingStep) => {
+    setDirection(stepOrder.indexOf(step) >= index ? 1 : -1)
+    save({ step })
+  }
+  const move = (delta: 1 | -1) =>
+    goTo(
+      stepOrder[Math.max(0, Math.min(stepOrder.length - 1, index + delta))] ??
+        'profile',
+    )
+
+  // Someone who already has a profile has nothing to set up (except while finishing the last two steps).
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(data))
-    localStorage.setItem(`${storageKey}:step`, String(step))
-  }, [data, step])
-
-  useEffect(() => {
-    const username = data.username.toLowerCase()
-    if (!/^[a-z0-9_]{3,20}$/.test(username)) {
-      setAvailability(username.length === 0 ? 'idle' : 'invalid')
-      return
-    }
-    setAvailability('checking')
-    const timer = window.setTimeout(() => {
-      void isUsernameAvailable(username)
-        .then((available) => setAvailability(available ? 'available' : 'taken'))
-        .catch(() => setAvailability('idle'))
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [data.username])
-
-  function update(field: keyof OnboardingData, value: string) {
-    setData((current) => ({ ...current, [field]: value }))
-    setError(null)
-  }
-
-  function next() {
-    if (step === 0 && data.displayName.trim().length < 1) {
-      setError('Add a display name to continue.')
-      return
-    }
-    if (step === 1 && availability !== 'available') {
-      setError('Choose an available username using 3 to 20 lowercase letters, numbers, or underscores.')
-      return
-    }
-    setError(null)
-    setStep((current) => Math.min(current + 1, 3))
-  }
-
-  function back() {
-    setError(null)
-    setStep((current) => Math.max(current - 1, 0))
-  }
-
-  async function finish(event: FormEvent) {
-    event.preventDefault()
-    if (!user) return
-    setSaving(true)
-    setError(null)
-    try {
-      if (password.length < 6) {
-        setError('Enter your account password so this device can create its private encryption key.')
-        return
-      }
-      const encryptionReady = await initializeEncryption(password)
-      if (!encryptionReady) {
-        setError('We could not unlock encryption with that password. Check it and try again.')
-        return
-      }
-      await createProfile({ id: user.id, username: data.username.toLowerCase(), displayName: data.displayName.trim(), about: data.about.trim() })
-      localStorage.removeItem(storageKey)
-      localStorage.removeItem(`${storageKey}:step`)
+    if (existingProfile && state.step !== 'keys' && state.step !== 'done')
       navigate('/', { replace: true })
-    } catch (profileError: unknown) {
-      setError(profileError instanceof Error ? profileError.message : 'Unable to save your profile.')
-    } finally {
-      setSaving(false)
-    }
+  }, [existingProfile, navigate, state.step])
+
+  // Move focus to the new step's heading so keyboard and screen-reader users land in the right place.
+  useEffect(() => {
+    container.current
+      ?.querySelector<HTMLElement>('[data-step-heading]')
+      ?.focus()
+  }, [state.step])
+
+  const finish = async () => {
+    clear()
+    queryClient.removeQueries({ queryKey: keys.profile(userId) })
+    navigate('/', { replace: true })
   }
 
   return (
-    <main className="onboarding-page">
-      <motion.section className="onboarding-card" aria-labelledby="onboarding-title" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 280, damping: 24 }}>
-        <div className="onboarding-progress"><span>Step {step + 1} of 4</span><div><i style={{ width: `${((step + 1) / 4) * 100}%` }} /></div></div>
-        {step === 0 && <><div className="onboarding-icon"><UserRound size={28} /></div><h1 id="onboarding-title">Make it yours</h1><p className="onboarding-copy">Choose the name people will see when they message you.</p><label className="onboarding-label">Display name<input autoFocus value={data.displayName} maxLength={80} onChange={(event) => update('displayName', event.target.value)} placeholder="Your name" /></label><div className="profile-preview"><span className="preview-avatar">{data.displayName.trim().slice(0, 1).toUpperCase() || 'W'}</span><div><strong>{data.displayName || 'Your name'}</strong><span>Hey there! I am using WhatsApp clone.</span></div></div></>}
-        {step === 1 && <><div className="onboarding-icon"><span>@</span></div><h1 id="onboarding-title">Pick a username</h1><p className="onboarding-copy">People can find you by this unique handle.</p><label className="onboarding-label">Username<div className="username-input"><span>@</span><input autoFocus value={data.username} maxLength={20} onChange={(event) => update('username', event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} placeholder="your_handle" /></div></label><div className={`availability ${availability}`}>{availability === 'checking' && <LoaderCircle size={15} className="spin" />}{availability === 'available' && <Check size={15} />}{availability === 'available' ? `@${data.username} is available` : availability === 'taken' ? 'That username is already taken' : availability === 'invalid' ? 'Use 3 to 20 lowercase characters' : availability === 'checking' ? 'Checking availability...' : 'Your username is private to your account until you share it.'}</div></>}
-        {step === 2 && <><div className="onboarding-icon"><ShieldCheck size={28} /></div><h1 id="onboarding-title">A little about you</h1><p className="onboarding-copy">This short note appears on your profile.</p><label className="onboarding-label">About<input autoFocus value={data.about} maxLength={140} onChange={(event) => update('about', event.target.value)} /></label><div className="security-note"><ShieldCheck size={18} /><span>Your messages will be end-to-end encrypted after the security setup phase.</span></div></>}
-        {step === 3 && <><div className="onboarding-icon"><Check size={28} /></div><h1 id="onboarding-title">Ready when you are</h1><p className="onboarding-copy">Confirm your password once so this device can protect your messages locally. It is never stored.</p><label className="onboarding-label">Account password<input type="password" autoComplete="current-password" value={password} onChange={(event) => { setPassword(event.target.value); setError(null) }} placeholder="Your account password" minLength={6} required /></label><button className="permission-button" onClick={() => void Notification.requestPermission()} disabled={!('Notification' in window)}>Allow notifications</button><small className="permission-detail">Camera and microphone access will be requested only when you start a call.</small></>}
-        {error && <div className="onboarding-error" role="alert">{error}</div>}
-        <form onSubmit={finish} className="onboarding-actions">{step > 0 && <button type="button" className="back-button" onClick={back}><ChevronLeft size={17} /> Back</button>}{step < 3 ? <button type="button" className="next-button" onClick={next}>Continue <ChevronRight size={17} /></button> : <button type="submit" className="next-button" disabled={saving}>{saving ? 'Setting up...' : 'Open messages'}</button>}</form>
-        <button className="onboarding-signout" onClick={() => void signOut()}>Sign out</button>
-      </motion.section>
+    <main className="grid min-h-dvh place-items-center bg-app-bg px-4 py-8 text-text">
+      <section
+        aria-label="Account setup"
+        className="w-full max-w-[460px] overflow-hidden rounded-2xl bg-surface p-7 shadow-popover sm:p-9"
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <span className="flex items-center gap-2.5">
+            <Logo size={32} />
+            <strong className="text-[15px]">Set up your account</strong>
+          </span>
+          <span className="text-xs text-muted" aria-live="polite">
+            {state.step === 'done'
+              ? 'Complete'
+              : `Step ${index + 1} of ${stepOrder.length - 1}: ${LABELS[state.step]}`}
+          </span>
+        </div>
+        <div
+          className="mb-7 h-1.5 overflow-hidden rounded-full bg-divider"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress)}
+        >
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            animate={{ width: `${progress}%` }}
+            transition={{ type: 'spring', stiffness: 200, damping: 26 }}
+          />
+        </div>
+        <div ref={container}>
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={state.step}
+              initial={{ opacity: 0, x: 32 * direction }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -32 * direction }}
+              transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+            >
+              {state.step === 'profile' && (
+                <ProfileStep data={state} save={save} next={() => move(1)} />
+              )}
+              {state.step === 'username' && (
+                <UsernameStep
+                  data={state}
+                  save={save}
+                  next={() => {
+                    setNotice(null)
+                    move(1)
+                  }}
+                  back={() => move(-1)}
+                  notice={notice}
+                />
+              )}
+              {state.step === 'about' && (
+                <AboutStep
+                  data={state}
+                  save={save}
+                  next={() => move(1)}
+                  back={() => move(-1)}
+                />
+              )}
+              {state.step === 'permissions' && (
+                <PermissionsStep next={() => move(1)} back={() => move(-1)} />
+              )}
+              {state.step === 'keys' && (
+                <EncryptionStep
+                  data={state}
+                  back={() => move(-1)}
+                  onDone={() => goTo('done')}
+                  onUsernameTaken={() => {
+                    setNotice(
+                      'That username was just taken. Please choose another.',
+                    )
+                    goTo('username')
+                  }}
+                />
+              )}
+              {state.step === 'done' && (
+                <DoneStep
+                  name={state.displayName}
+                  onFinish={() => void finish()}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        {state.step !== 'done' && (
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="mx-auto mt-7 block text-[13px] text-muted hover:text-text hover:underline"
+          >
+            Sign out
+          </button>
+        )}
+      </section>
     </main>
   )
 }

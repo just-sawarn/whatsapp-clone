@@ -13,19 +13,26 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(fetch(event.request).catch(() => caches.match(event.request)))
 })
 
+// Push payloads are generic on purpose (the server cannot read encrypted messages): { title, body, tag, url }.
 self.addEventListener('push', (event) => {
   const payload = event.data?.json() ?? {}
-  event.waitUntil(self.registration.showNotification(payload.title ?? 'New message', {
-    body: payload.body ?? 'You have a new message.',
-    tag: payload.tag ?? 'whatsapp-message',
-  }))
+  event.waitUntil(
+    self.registration.showNotification(payload.title ?? 'New message', {
+      body: payload.body ?? 'You have a new message.',
+      tag: payload.tag ?? 'whatsapp-message',
+      data: { url: typeof payload.url === 'string' && payload.url.startsWith('/') ? payload.url : '/' },
+    }),
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-    const firstClient = clients[0]
-    if (firstClient) return firstClient.focus()
-    return self.clients.openWindow('/')
-  }))
+  const target = event.notification.data?.url ?? '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients[0]
+      if (existing) return existing.focus().then((client) => ('navigate' in client ? client.navigate(target) : client))
+      return self.clients.openWindow(target)
+    }),
+  )
 })

@@ -6,3 +6,7 @@ dist/
 !.env.example
 .DS_Store
 *.local
+.claude
+
+# Local test artifacts
+tests/e2e/screenshots/

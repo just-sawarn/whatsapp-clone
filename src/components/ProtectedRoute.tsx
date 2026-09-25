@@ -6,7 +6,13 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  if (loading) return <div className="route-loading">Restoring your session...</div>
-  if (!user) return <Navigate to="/auth" replace state={{ from: location.pathname }} />
+  if (loading)
+    return (
+      <div className="grid min-h-dvh place-items-center bg-app-bg text-sm text-muted">
+        Restoring your session…
+      </div>
+    )
+  if (!user)
+    return <Navigate to="/auth" replace state={{ from: location.pathname }} />
   return children
 }

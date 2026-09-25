@@ -16,7 +16,13 @@ function audio(): AudioContext | null {
   }
 }
 
-function tone(frequency: number, startOffset: number, duration: number, volume = 0.16, type: OscillatorType = 'sine'): void {
+function tone(
+  frequency: number,
+  startOffset: number,
+  duration: number,
+  volume = 0.16,
+  type: OscillatorType = 'sine',
+): void {
   const ctx = audio()
   if (!ctx) return
   const oscillator = ctx.createOscillator()
@@ -32,7 +38,10 @@ function tone(frequency: number, startOffset: number, duration: number, volume =
   oscillator.stop(start + duration + 0.05)
 }
 
-export const messageSoundLabels: Record<Exclude<MessageSound, 'off'>, string> = {
+export const messageSoundLabels: Record<
+  Exclude<MessageSound, 'off'>,
+  string
+> = {
   chime: 'Two-tone chime',
   pop: 'Soft pop',
   ding: 'Single ding',

@@ -1,14 +1,77 @@
-export async function registerNotificationServiceWorker(): Promise<void> {
-  if (!('serviceWorker' in navigator)) return
-  await navigator.serviceWorker.register('/sw.js')
+export async function registerNotificationServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null
+  return navigator.serviceWorker.register('/sw.js')
 }
 
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!('Notification' in window)) return 'denied'
+export function notificationPermission():
+  NotificationPermission | 'unsupported' {
+  return 'Notification' in window ? Notification.permission : 'unsupported'
+}
+
+export async function requestNotificationPermission(): Promise<
+  NotificationPermission | 'unsupported'
+> {
+  if (!('Notification' in window)) return 'unsupported'
   return Notification.requestPermission()
 }
 
-export function notifyNewMessage(senderName: string): void {
-  if (!('Notification' in window) || Notification.permission !== 'granted' || document.visibilityState === 'visible') return
-  new Notification(`New message from ${senderName}`, { body: 'Open WhatsApp to read it.', tag: 'whatsapp-message' })
+/**
+ * Shows a browser notification while the tab is in the background. The body is built on this device from
+ * the already-decrypted message, so plaintext never travels through a push service.
+ */
+export function showNotification(
+  title: string,
+  body: string,
+  tag: string,
+  onClick?: () => void,
+): void {
+  if (
+    notificationPermission() !== 'granted' ||
+    document.visibilityState === 'visible'
+  )
+    return
+  const notification = new Notification(title, { body, tag, silent: true })
+  notification.onclick = () => {
+    window.focus()
+    notification.close()
+    onClick?.()
+  }
+}
+
+// ------------------------------------------------------------------ Web Push (background delivery)
+
+const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as
+  string | undefined
+export const pushConfigured = Boolean(vapidPublicKey)
+
+function urlBase64ToBytes(value: string): Uint8Array {
+  const padded = value
+    .padEnd(Math.ceil(value.length / 4) * 4, '=')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0))
+}
+
+/** Subscribes this browser to Web Push and returns the subscription to store in `push_subscriptions`. */
+export async function subscribeToPush(): Promise<PushSubscriptionJSON | null> {
+  if (!vapidPublicKey || !('PushManager' in window)) return null
+  const registration = await navigator.serviceWorker.ready
+  const existing = await registration.pushManager.getSubscription()
+  const subscription =
+    existing ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToBytes(vapidPublicKey),
+    }))
+  return subscription.toJSON()
+}
+
+export async function unsubscribeFromPush(): Promise<string | null> {
+  if (!('serviceWorker' in navigator)) return null
+  const registration = await navigator.serviceWorker.ready
+  const subscription = await registration.pushManager.getSubscription()
+  if (!subscription) return null
+  const endpoint = subscription.endpoint
+  await subscription.unsubscribe()
+  return endpoint
 }

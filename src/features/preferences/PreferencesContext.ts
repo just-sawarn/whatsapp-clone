@@ -30,10 +30,13 @@ export type PreferencesContextValue = Preferences & {
   update: (patch: Partial<Preferences>) => void
 }
 
-export const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined)
+export const PreferencesContext = createContext<
+  PreferencesContextValue | undefined
+>(undefined)
 
 export function usePreferences(): PreferencesContextValue {
   const context = useContext(PreferencesContext)
-  if (!context) throw new Error('usePreferences must be used inside PreferencesProvider.')
+  if (!context)
+    throw new Error('usePreferences must be used inside PreferencesProvider.')
   return context
 }

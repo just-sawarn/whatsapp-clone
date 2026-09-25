@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { wallpapers } from '../../design/tokens'
 import {
   PreferencesContext,
@@ -11,7 +17,11 @@ import {
 } from './PreferencesContext'
 
 const storageKey = 'wa:preferences'
-const rootFontSize: Record<FontSize, string> = { small: '15px', medium: '16px', large: '18px' }
+const rootFontSize: Record<FontSize, string> = {
+  small: '15px',
+  medium: '16px',
+  large: '18px',
+}
 const themes: ThemeMode[] = ['system', 'light', 'dark']
 const fontSizes: FontSize[] = ['small', 'medium', 'large']
 const sounds: MessageSound[] = ['off', 'chime', 'pop', 'ding']
@@ -22,12 +32,28 @@ function readPreferences(): Preferences {
     if (!raw) return defaultPreferences
     const saved = JSON.parse(raw) as Partial<Preferences>
     return {
-      theme: themes.includes(saved.theme as ThemeMode) ? (saved.theme as ThemeMode) : defaultPreferences.theme,
-      fontSize: fontSizes.includes(saved.fontSize as FontSize) ? (saved.fontSize as FontSize) : defaultPreferences.fontSize,
-      wallpaper: wallpapers.some((wallpaper) => wallpaper.id === saved.wallpaper) ? (saved.wallpaper as Preferences['wallpaper']) : defaultPreferences.wallpaper,
-      messageSound: sounds.includes(saved.messageSound as MessageSound) ? (saved.messageSound as MessageSound) : defaultPreferences.messageSound,
-      ringtone: typeof saved.ringtone === 'boolean' ? saved.ringtone : defaultPreferences.ringtone,
-      sentSound: typeof saved.sentSound === 'boolean' ? saved.sentSound : defaultPreferences.sentSound,
+      theme: themes.includes(saved.theme as ThemeMode)
+        ? (saved.theme as ThemeMode)
+        : defaultPreferences.theme,
+      fontSize: fontSizes.includes(saved.fontSize as FontSize)
+        ? (saved.fontSize as FontSize)
+        : defaultPreferences.fontSize,
+      wallpaper: wallpapers.some(
+        (wallpaper) => wallpaper.id === saved.wallpaper,
+      )
+        ? (saved.wallpaper as Preferences['wallpaper'])
+        : defaultPreferences.wallpaper,
+      messageSound: sounds.includes(saved.messageSound as MessageSound)
+        ? (saved.messageSound as MessageSound)
+        : defaultPreferences.messageSound,
+      ringtone:
+        typeof saved.ringtone === 'boolean'
+          ? saved.ringtone
+          : defaultPreferences.ringtone,
+      sentSound:
+        typeof saved.sentSound === 'boolean'
+          ? saved.sentSound
+          : defaultPreferences.sentSound,
       notificationBannerDismissed: saved.notificationBannerDismissed === true,
     }
   } catch {
@@ -42,11 +68,13 @@ function systemPrefersDark(): boolean {
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState<Preferences>(readPreferences)
   const [systemDark, setSystemDark] = useState(systemPrefersDark)
-  const resolvedDark = preferences.theme === 'system' ? systemDark : preferences.theme === 'dark'
+  const resolvedDark =
+    preferences.theme === 'system' ? systemDark : preferences.theme === 'dark'
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    const onChange = (event: MediaQueryListEvent) =>
+      setSystemDark(event.matches)
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
   }, [])
@@ -68,6 +96,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const value = useMemo<PreferencesContextValue>(() => ({ ...preferences, resolvedDark, update }), [preferences, resolvedDark, update])
-  return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>
+  const value = useMemo<PreferencesContextValue>(
+    () => ({ ...preferences, resolvedDark, update }),
+    [preferences, resolvedDark, update],
+  )
+  return (
+    <PreferencesContext.Provider value={value}>
+      {children}
+    </PreferencesContext.Provider>
+  )
 }
