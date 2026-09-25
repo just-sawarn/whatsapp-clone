@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+// Production builds carry no console output and no debugger statements, from the app or from libraries, so the
+// browser console shows nothing about how the app works or what it is doing. (Development keeps them.)
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
   build: {
     outDir: 'dist',
     sourcemap: false,
@@ -16,4 +19,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

@@ -1,6 +1,7 @@
 import { getActivePrivateKey } from '../../lib/crypto/keyStore'
 import { MIGRATIONS_HINT, isMissingFunctionError } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
+import { buckets } from '../../lib/storageUrls'
 import { decryptRow, type MessageRow } from './messageCrypto'
 import { toPreview } from './preview'
 import type { ChatSummary, MessageKind } from './types'
@@ -39,6 +40,10 @@ type OverviewRow = {
   participant_count: number
   unread_count: number
   last_message: LastMessageJson | null
+  announcement_only: boolean
+  can_post: boolean
+  community_id: string | null
+  community_name: string | null
 }
 
 async function previewOf(
@@ -86,6 +91,7 @@ export async function loadChatOverview(userId: string): Promise<ChatSummary[]> {
       peerId: row.peer_id,
       peerUsername: row.peer_username,
       avatarPath: row.is_group ? row.avatar_url : row.peer_avatar_url,
+      avatarBucket: row.is_group ? buckets.chatAvatars : buckets.avatars,
       isPinned: row.is_pinned,
       isArchived: row.is_archived,
       isMuted: row.is_muted,
@@ -93,6 +99,10 @@ export async function loadChatOverview(userId: string): Promise<ChatSummary[]> {
       unreadCount: Number(row.unread_count),
       participantCount: Number(row.participant_count),
       peerLastSeen: row.peer_last_seen,
+      isAnnouncement: row.announcement_only,
+      canPost: row.can_post,
+      communityId: row.community_id,
+      communityName: row.community_name,
       lastMessage: await previewOf(row, userId),
     })),
   )

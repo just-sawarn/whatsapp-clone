@@ -1,5 +1,12 @@
 import { useRef, type MouseEvent, type PointerEvent } from 'react'
-import { BellOff, FileText, Image as ImageIcon, Mic, Pin } from 'lucide-react'
+import {
+  BellOff,
+  FileText,
+  Image as ImageIcon,
+  Megaphone,
+  Mic,
+  Pin,
+} from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Icon } from '../../../components/ui/Icon'
 import { cn } from '../../../lib/cn'
@@ -88,6 +95,7 @@ export function ChatListItem({
       <Avatar
         name={chat.name}
         path={chat.avatarPath}
+        bucket={chat.avatarBucket}
         size={48}
         online={online && !chat.isGroup}
       />
@@ -95,11 +103,16 @@ export function ChatListItem({
         <span className="flex items-baseline justify-between gap-2">
           <strong
             className={cn(
-              'truncate text-[16px] font-normal',
+              'flex min-w-0 items-center gap-1.5 text-[16px] font-normal',
               flagged && 'font-medium',
             )}
           >
-            {chat.name}
+            {chat.isAnnouncement && (
+              <span className="shrink-0" title="Community announcements">
+                <Icon icon={Megaphone} size={15} className="text-link" />
+              </span>
+            )}
+            <span className="truncate">{chat.name}</span>
           </strong>
           {chat.lastMessage && (
             <time

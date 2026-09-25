@@ -5,7 +5,7 @@ import {
   launch,
   newPerson,
   onboard,
-  reloadAndUnlock,
+  reload,
   sendText,
   shot,
   startChatWith,
@@ -99,7 +99,7 @@ describe('message actions', () => {
   })
 
   it('delivers everything to the recipient, including reactions and the forwarded label', async () => {
-    await reloadAndUnlock(bob)
+    await reload(bob)
     await bob.page.getByText('Alice Adams').first().click()
     await bob.page.getByText('this is a reply').first().waitFor()
     await bob.page.getByText('Forwarded').first().waitFor()
@@ -136,7 +136,7 @@ describe('groups', () => {
     await page.getByText('3 participants').first().waitFor()
     await shot(page, '14-group-info')
 
-    await reloadAndUnlock(carol)
+    await reload(carol)
     await carol.page.getByText('Team').first().click()
     await carol.page.getByText('welcome to the team').last().waitFor()
     expect(alice.errors).toEqual([])
@@ -157,14 +157,14 @@ describe('status', () => {
       .waitFor()
     await page.getByText('My status').first().waitFor()
 
-    await reloadAndUnlock(bob)
+    await reload(bob)
     await bob.page.getByRole('link', { name: 'Status', exact: true }).click()
     await bob.page.getByRole('button', { name: /Alice Adams/ }).click()
     await bob.page.getByText('Hello from my status').waitFor()
     await shot(bob.page, '15-status-viewer')
     await bob.page.getByRole('button', { name: 'Close status' }).click()
 
-    await reloadAndUnlock(alice)
+    await reload(alice)
     await alice.page.getByRole('link', { name: 'Status', exact: true }).click()
     await alice.page.getByRole('button', { name: /My status/ }).click()
     await alice.page.getByRole('button', { name: /Viewed by/ }).click()
@@ -175,7 +175,7 @@ describe('status', () => {
   })
 
   it('keeps a stranger out of the audience', async () => {
-    await reloadAndUnlock(carol)
+    await reload(carol)
     await carol.page.getByRole('link', { name: 'Status', exact: true }).click()
     await carol.page.getByText('No status updates yet').waitFor()
     expect(carol.errors).toEqual([])
@@ -204,17 +204,6 @@ describe('settings', () => {
     await shot(page, '16-privacy')
 
     await page.reload()
-    await page
-      .getByRole('button', { name: 'Unlock', exact: true })
-      .first()
-      .click()
-    await page
-      .getByLabel('Password protecting your key')
-      .fill('correct-horse-battery')
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Unlock', exact: true })
-      .click()
     await page.getByRole('switch', { name: 'Read receipts' }).waitFor()
     expect(
       await page

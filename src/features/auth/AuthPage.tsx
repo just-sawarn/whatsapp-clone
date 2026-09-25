@@ -13,7 +13,7 @@ type Screen = 'welcome' | 'login' | 'signup' | 'reset' | 'verify'
 const order: Screen[] = ['welcome', 'login', 'signup', 'reset', 'verify']
 
 export default function AuthPage() {
-  const { loading, user, clearError } = useAuth()
+  const { loading, user, clearError, sessionNotice } = useAuth()
   const navigate = useNavigate()
   const [screen, setScreen] = useState<Screen>('welcome')
   const [direction, setDirection] = useState(1)
@@ -31,6 +31,14 @@ export default function AuthPage() {
 
   return (
     <AuthShell>
+      {sessionNotice && (
+        <p
+          role="status"
+          className="mb-5 rounded-lg bg-warning px-3 py-2 text-[13px] text-text"
+        >
+          {sessionNotice}
+        </p>
+      )}
       <AnimatePresence mode="wait" initial={false} custom={direction}>
         <motion.div
           key={screen}

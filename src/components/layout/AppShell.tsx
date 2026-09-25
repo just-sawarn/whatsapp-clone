@@ -14,7 +14,7 @@ export default function AppShell() {
   const inChat = useMatch('/chat/:chatId') !== null
 
   useEffect(() => {
-    document.title = unread > 0 ? `(${unread}) WhatsApp` : 'WhatsApp'
+    document.title = unread > 0 ? `(${unread}) ChatBit` : 'ChatBit'
   }, [unread])
 
   return (

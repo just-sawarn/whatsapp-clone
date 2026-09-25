@@ -2,7 +2,6 @@ import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { Users } from 'lucide-react'
 import AppShell from './components/layout/AppShell'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { ProfileGate } from './components/ProfileGate'
@@ -14,7 +13,6 @@ import ResetPasswordPage from './features/auth/ResetPasswordPage'
 import ChatsLayout from './features/chat/ChatsLayout'
 import ConversationRoute from './features/chat/ConversationRoute'
 import WelcomePane from './features/chat/WelcomePane'
-import ComingSoon from './features/placeholder/ComingSoon'
 import { PreferencesProvider } from './features/preferences/PreferencesProvider'
 import { RouteFallback } from './components/RouteFallback'
 import { registerNotificationServiceWorker } from './lib/notifications'
@@ -25,6 +23,9 @@ const OnboardingPage = lazy(
   () => import('./features/onboarding/OnboardingPage'),
 )
 const SettingsRoutes = lazy(() => import('./features/settings/SettingsRoutes'))
+const CommunitiesRoutes = lazy(
+  () => import('./features/communities/CommunitiesRoutes'),
+)
 const StatusRoutes = lazy(() => import('./features/status/StatusRoutes'))
 
 const queryClient = new QueryClient({
@@ -95,13 +96,11 @@ createRoot(rootElement).render(
                       }
                     />
                     <Route
-                      path="communities"
+                      path="communities/*"
                       element={
-                        <ComingSoon
-                          icon={Users}
-                          title="Communities"
-                          description="Communities are not part of this version yet."
-                        />
+                        <Suspense fallback={<RouteFallback />}>
+                          <CommunitiesRoutes />
+                        </Suspense>
                       }
                     />
                     <Route

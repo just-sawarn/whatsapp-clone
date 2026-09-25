@@ -10,28 +10,112 @@ import {
 
 type IdentityRecord = WrappedPrivateKey & { userId: string }
 
+/** An unlocked key kept between page loads. The key is non-extractable: it can be used but never read out. */
+type RememberedKey = { userId: string; key: CryptoKey; expiresAt: number }
+
 interface CryptoDatabase extends DBSchema {
   identities: { key: string; value: IdentityRecord }
+  unlocked: { key: string; value: RememberedKey }
 }
 
 /** unlocked: usable now · locked: a local key exists but needs its password · missing: no key on this device */
 export type IdentityState = 'unlocked' | 'locked' | 'missing'
 
+// The app was renamed to ChatBit, but this marker and the IndexedDB names below keep their original values on
+// purpose: changing them would orphan every existing user's key and stored backups.
 const BACKUP_APP = 'whatsapp-clone-key-backup'
 
 let database: Promise<IDBPDatabase<CryptoDatabase>> | null = null
 
 function getDatabase(): Promise<IDBPDatabase<CryptoDatabase>> {
-  database ??= openDB<CryptoDatabase>('whatsapp-clone-crypto', 1, {
+  database ??= openDB<CryptoDatabase>('whatsapp-clone-crypto', 2, {
     upgrade(db) {
       if (!db.objectStoreNames.contains('identities'))
         db.createObjectStore('identities')
+      if (!db.objectStoreNames.contains('unlocked'))
+        db.createObjectStore('unlocked')
     },
   })
   return database
 }
 
 const activePrivateKeys = new Map<string, CryptoKey>()
+
+/** Per account: how long the unlocked key may be kept on this device. Absent means "do not remember". */
+const rememberDeadlines = new Map<string, number>()
+
+async function persistUnlocked(
+  userId: string,
+  key: CryptoKey,
+  expiresAt: number,
+): Promise<void> {
+  try {
+    await (
+      await getDatabase()
+    ).put('unlocked', { userId, key, expiresAt }, userId)
+  } catch {
+    // Some browsers cannot store keys; the user is then asked to unlock again after a reload.
+  }
+}
+
+/** Makes a key usable now, and remembers it on this device if a deadline is set for the account. */
+async function activate(userId: string, key: CryptoKey): Promise<void> {
+  activePrivateKeys.set(userId, key)
+  const deadline = rememberDeadlines.get(userId)
+  if (deadline !== undefined && deadline > Date.now())
+    await persistUnlocked(userId, key, deadline)
+}
+
+/**
+ * Sets (or with null, clears) how long this account's unlocked key may stay on the device. If the key is already
+ * unlocked it is remembered immediately; clearing also wipes anything already remembered.
+ */
+export async function setRememberDeadline(
+  userId: string,
+  deadline: number | null,
+): Promise<void> {
+  if (deadline === null) {
+    rememberDeadlines.delete(userId)
+    await forgetRemembered(userId)
+    return
+  }
+  rememberDeadlines.set(userId, deadline)
+  const key = activePrivateKeys.get(userId)
+  if (key && deadline > Date.now()) await persistUnlocked(userId, key, deadline)
+}
+
+/** Removes the remembered key for an account (sign-out, expiry, or opting out). */
+export async function forgetRemembered(userId: string): Promise<void> {
+  try {
+    await (await getDatabase()).delete('unlocked', userId)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * After a page load, brings back a remembered unlocked key if it has not expired. Returns whether the identity is
+ * unlocked afterwards. An expired entry is deleted.
+ */
+export async function restoreUnlockedIdentity(
+  userId: string,
+  now = Date.now(),
+): Promise<boolean> {
+  if (activePrivateKeys.has(userId)) return true
+  try {
+    const db = await getDatabase()
+    const remembered = await db.get('unlocked', userId)
+    if (!remembered) return false
+    if (remembered.expiresAt <= now || !(await readRecord(userId))) {
+      await db.delete('unlocked', userId)
+      return false
+    }
+    activePrivateKeys.set(userId, remembered.key)
+    return true
+  } catch {
+    return false
+  }
+}
 
 async function readRecord(userId: string): Promise<IdentityRecord | undefined> {
   return (await getDatabase()).get('identities', userId)
@@ -48,7 +132,7 @@ export async function initializeIdentity(
 ): Promise<JsonWebKey> {
   const existing = await readRecord(userId)
   if (existing) {
-    activePrivateKeys.set(userId, await unwrapPrivateKey(existing, password))
+    await activate(userId, await unwrapPrivateKey(existing, password))
     return existing.publicKey
   }
   return createIdentity(userId, password)
@@ -62,7 +146,7 @@ async function createIdentity(
   const wrapped = await wrapPrivateKey(keyPair, password)
   await writeRecord({ ...wrapped, userId })
   // Re-import from the wrapped form so the in-memory key is the same non-extractable kind as after an unlock.
-  activePrivateKeys.set(userId, await unwrapPrivateKey(wrapped, password))
+  await activate(userId, await unwrapPrivateKey(wrapped, password))
   return wrapped.publicKey
 }
 
@@ -88,7 +172,7 @@ export async function unlockStoredIdentity(
 ): Promise<boolean> {
   const record = await readRecord(userId)
   if (!record) return false
-  activePrivateKeys.set(userId, await unwrapPrivateKey(record, password))
+  await activate(userId, await unwrapPrivateKey(record, password))
   return true
 }
 
@@ -99,6 +183,8 @@ export function getActivePrivateKey(userId: string): CryptoKey | null {
 /** Deletes this account's key from the device entirely (used when the account itself is deleted). */
 export async function forgetIdentity(userId: string): Promise<void> {
   activePrivateKeys.delete(userId)
+  rememberDeadlines.delete(userId)
+  await forgetRemembered(userId)
   await (await getDatabase()).delete('identities', userId)
 }
 
@@ -125,7 +211,7 @@ export async function rewrapIdentity(
     newPassword,
   )
   await writeRecord({ ...rewrapped, userId })
-  activePrivateKeys.set(userId, await unwrapPrivateKey(rewrapped, newPassword))
+  await activate(userId, await unwrapPrivateKey(rewrapped, newPassword))
 }
 
 /** Replaces the identity with a fresh key pair. Messages sealed to the old key become unreadable on this account. */
@@ -198,6 +284,9 @@ export async function importKeyBackup(
   if (backup.userId !== userId)
     throw new Error('This backup belongs to a different account.')
   await writeRecord({ ...backup.record, userId })
+  // The remembered key belonged to the record just replaced, so it must not survive.
+  activePrivateKeys.delete(userId)
+  await forgetRemembered(userId)
   return backup.record.publicKey
 }
 

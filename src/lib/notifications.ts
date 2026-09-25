@@ -1,5 +1,16 @@
+/**
+ * Registers the service worker in production builds only. In development it would sit between Vite and the
+ * browser, so any worker left over from an earlier build is removed instead.
+ */
 export async function registerNotificationServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
+  if (!import.meta.env.PROD) {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(
+      registrations.map((registration) => registration.unregister()),
+    )
+    return null
+  }
   return navigator.serviceWorker.register('/sw.js')
 }
 

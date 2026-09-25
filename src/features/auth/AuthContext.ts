@@ -12,6 +12,10 @@ export type AuthContextValue = {
   clearError: () => void
   /** State of this device's encryption key; null until it has been checked. */
   identityState: IdentityState | null
+  /** When this login ends (7 days after signing in), or null when signed out. */
+  loginExpiresAt: number | null
+  /** Why the user was signed out automatically, shown on the sign-in screen. */
+  sessionNotice: string | null
   /** True after the user opened a password-reset link and must choose a new password. */
   recoveryMode: boolean
   signIn: (email: string, password: string) => Promise<boolean>

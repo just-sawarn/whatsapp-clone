@@ -13,6 +13,10 @@ export type Preferences = {
   ringtone: boolean
   sentSound: boolean
   notificationBannerDismissed: boolean
+  /** Keep the unlocked encryption key on this device until the login expires, so a reload does not ask again. */
+  stayUnlocked: boolean
+  /** 0.1 to 1: how loud notification sounds and the call ringtone are. 1 is the loudest. */
+  soundVolume: number
 }
 
 export const defaultPreferences: Preferences = {
@@ -23,6 +27,8 @@ export const defaultPreferences: Preferences = {
   ringtone: true,
   sentSound: false,
   notificationBannerDismissed: false,
+  stayUnlocked: true,
+  soundVolume: 1,
 }
 
 export type PreferencesContextValue = Preferences & {

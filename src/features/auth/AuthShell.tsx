@@ -9,7 +9,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="w-full max-w-[420px] overflow-hidden rounded-2xl bg-surface p-7 shadow-popover sm:p-9">
         <div className="mb-7 flex items-center gap-3">
           <Logo size={40} />
-          <strong className="text-lg font-semibold">WhatsApp</strong>
+          <strong className="text-lg font-semibold">ChatBit</strong>
         </div>
         {children}
         <p className="mt-8 flex items-start gap-2 text-[12px] leading-relaxed text-muted">

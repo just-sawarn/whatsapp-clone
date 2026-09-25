@@ -11,7 +11,11 @@ import {
   pushConfigured,
   requestNotificationPermission,
 } from '../../../lib/notifications'
-import { messageSoundLabels, playMessageSound } from '../../../lib/sounds'
+import {
+  messageSoundLabels,
+  playMessageSound,
+  playRingPreview,
+} from '../../../lib/sounds'
 import { useCurrentUserId } from '../../auth/useCurrentUser'
 import {
   usePreferences,
@@ -116,15 +120,55 @@ export function NotificationsSection() {
             Play
           </Button>
         </div>
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between text-[13px] font-medium text-muted">
+            <label htmlFor="sound-volume">Sound volume</label>
+            <span aria-hidden="true">
+              {Math.round(preferences.soundVolume * 100)}%
+            </span>
+          </div>
+          <input
+            id="sound-volume"
+            type="range"
+            min={10}
+            max={100}
+            step={5}
+            value={Math.round(preferences.soundVolume * 100)}
+            aria-valuetext={`${Math.round(preferences.soundVolume * 100)} percent`}
+            onChange={(event) =>
+              preferences.update({
+                soundVolume: Number(event.target.value) / 100,
+              })
+            }
+            // Preview when the slider is let go, so dragging is not a burst of sounds.
+            onPointerUp={() => playMessageSound(preferences.messageSound)}
+            onKeyUp={() => playMessageSound(preferences.messageSound)}
+            className="h-2 w-full cursor-pointer accent-[rgb(var(--wa-primary))]"
+          />
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            100% is the loudest the sounds can be. Your device&rsquo;s own
+            volume still applies.
+          </p>
+        </div>
         <SettingRow
           label="Call ringtone"
           description="Ring for incoming calls."
           control={
-            <Switch
-              label="Call ringtone"
-              checked={preferences.ringtone}
-              onChange={(value) => preferences.update({ ringtone: value })}
-            />
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                className="h-9 px-4 text-[13px]"
+                onClick={playRingPreview}
+                disabled={!preferences.ringtone}
+              >
+                Preview
+              </Button>
+              <Switch
+                label="Call ringtone"
+                checked={preferences.ringtone}
+                onChange={(value) => preferences.update({ ringtone: value })}
+              />
+            </div>
           }
         />
         <SettingRow

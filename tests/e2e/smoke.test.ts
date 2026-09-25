@@ -6,7 +6,7 @@ import {
   launch,
   newPerson,
   onboard,
-  reloadAndUnlock,
+  reload,
   sendText,
   shot,
   startChatWith,
@@ -36,7 +36,7 @@ describe('the app in a real browser', () => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await page.goto(`${APP}/auth`)
-    await page.getByRole('heading', { name: 'Welcome to WhatsApp' }).waitFor()
+    await page.getByRole('heading', { name: 'Welcome to ChatBit' }).waitFor()
     await shot(page, '01-welcome')
     await page.getByRole('button', { name: 'Create account' }).click()
     await page.getByRole('heading', { name: 'Create your account' }).waitFor()
@@ -67,9 +67,9 @@ describe('the app in a real browser', () => {
     expect(alice.errors).toEqual([])
   })
 
-  it('lets the recipient unlock after a reload and read the message', async () => {
+  it('keeps the recipient unlocked after a reload and shows the message', async () => {
     const { page } = bob
-    await reloadAndUnlock(bob)
+    await reload(bob)
     await page.getByText('Alice Adams').first().waitFor()
     await page.getByText('hello bob, this is secret').first().waitFor() // decrypted preview in the list
     await shot(page, '05-bob-chat-list')

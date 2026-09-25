@@ -12,14 +12,17 @@ type Props = {
   onForward: (chatIds: string[]) => Promise<void>
 }
 
-/** Multi-select chat picker, capped at five destinations like WhatsApp. */
+/** Multi-select chat picker, capped at five destinations. */
 export function ForwardModal({ open, onClose, onForward }: Props) {
   const { data: chats = [] } = useChatOverview()
   const [selected, setSelected] = useState<string[]>([])
   const [term, setTerm] = useState('')
   const [busy, setBusy] = useState(false)
-  const shown = chats.filter((chat) =>
-    chat.name.toLowerCase().includes(term.trim().toLowerCase()),
+  // Announcements chats only accept posts from admins, so members cannot forward into them.
+  const shown = chats.filter(
+    (chat) =>
+      chat.canPost &&
+      chat.name.toLowerCase().includes(term.trim().toLowerCase()),
   )
 
   const toggle = (id: string) =>
@@ -69,7 +72,12 @@ export function ForwardModal({ open, onClose, onForward }: Props) {
                   onChange={() => toggle(chat.id)}
                   className="h-4 w-4 accent-[rgb(var(--wa-primary))]"
                 />
-                <Avatar name={chat.name} path={chat.avatarPath} size={36} />
+                <Avatar
+                  name={chat.name}
+                  path={chat.avatarPath}
+                  bucket={chat.avatarBucket}
+                  size={36}
+                />
                 <span className="truncate text-[15px]">{chat.name}</span>
               </label>
             </li>

@@ -158,6 +158,7 @@ export function CallOverlay() {
                 <Avatar
                   name={state.peerName}
                   path={chat?.avatarPath}
+                  bucket={chat?.avatarBucket}
                   size={148}
                 />
               </div>

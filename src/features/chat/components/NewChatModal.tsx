@@ -10,6 +10,8 @@ import { Avatar } from '../../../components/ui/Avatar'
 import { errorMessage } from '../../../lib/errors'
 import { keys } from '../../../lib/queryKeys'
 import { useCurrentUserId } from '../../auth/useCurrentUser'
+import { AvatarPicker } from '../../../components/ui/AvatarPicker'
+import { uploadPhotoAfterCreate } from '../useChatAvatar'
 import { createGroupChat, openDirectChat } from '../chatService'
 import { ContactPicker, type PickedPerson } from './ContactPicker'
 
@@ -27,6 +29,7 @@ export function NewChatModal({ mode, onClose, onSwitch }: Props) {
   const [busy, setBusy] = useState(false)
   const [members, setMembers] = useState<PickedPerson[]>([])
   const [name, setName] = useState('')
+  const [photo, setPhoto] = useState<File | null>(null)
 
   const finish = async (chatId: string) => {
     await queryClient.invalidateQueries({ queryKey: keys.chats(userId) })
@@ -59,12 +62,14 @@ export function NewChatModal({ mode, onClose, onSwitch }: Props) {
   const createGroup = async () => {
     setBusy(true)
     try {
-      await finish(
-        await createGroupChat(
-          name,
-          members.map((member) => member.userId),
-        ),
+      const chatId = await createGroupChat(
+        name,
+        members.map((member) => member.userId),
       )
+      // The photo needs the group to exist, and never blocks creating it.
+      await uploadPhotoAfterCreate(chatId, photo, notify)
+      setPhoto(null)
+      await finish(chatId)
     } catch (error) {
       notify(errorMessage(error, 'Could not create the group.'), 'error')
     } finally {
@@ -128,6 +133,15 @@ export function NewChatModal({ mode, onClose, onSwitch }: Props) {
             onPick={toggleMember}
             selectedIds={new Set(members.map((member) => member.userId))}
           />
+          <div className="flex justify-center">
+            <AvatarPicker
+              name={name}
+              size={80}
+              previewFile={photo}
+              onPick={setPhoto}
+              onRemove={() => setPhoto(null)}
+            />
+          </div>
           <Input
             label="Group name"
             value={name}

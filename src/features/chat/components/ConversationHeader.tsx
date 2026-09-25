@@ -25,6 +25,8 @@ function useSubtitle(chat: ChatSummary, typingNames: string[]): string {
   const { data: participants } = useParticipants(chat.id, chat.isGroup)
   if (typingNames.length > 0)
     return chat.isGroup ? `${typingNames.join(', ')} typing…` : 'typing…'
+  if (chat.isAnnouncement)
+    return `Announcements · ${chat.communityName ?? 'Community'}`
   if (chat.isGroup)
     return participants
       ? participants.map((participant) => participant.displayName).join(', ')
@@ -65,6 +67,7 @@ export function ConversationHeader({
         <Avatar
           name={chat.name}
           path={chat.avatarPath}
+          bucket={chat.avatarBucket}
           size={40}
           online={chat.peerId !== null && onlineUserIds.has(chat.peerId)}
         />

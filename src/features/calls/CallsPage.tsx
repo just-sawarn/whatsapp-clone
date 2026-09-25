@@ -78,6 +78,7 @@ function History() {
                   <Avatar
                     name={chat?.name ?? 'Unknown'}
                     path={chat?.avatarPath}
+                    bucket={chat?.avatarBucket}
                     size={48}
                   />
                   <span className="min-w-0 flex-1">

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -72,6 +73,14 @@ type DropdownMenuProps = {
   align?: 'left' | 'right'
 }
 
+const GAP = 4
+const EDGE = 8
+
+/**
+ * A button that opens a menu. The menu is rendered in a portal and positioned from the button's rectangle, so
+ * a parent with `overflow: hidden` or its own scrolling can never clip it. It opens below the button and flips
+ * above when there is no room, and closes on scroll or resize (its anchor would have moved).
+ */
 export function DropdownMenu({
   items,
   label = 'More options',
@@ -79,11 +88,49 @@ export function DropdownMenu({
   align = 'right',
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState<{
+    top: number
+    left: number
+  } | null>(null)
+  const trigger = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
-  useDismiss(root, close, open)
+  useDismiss([trigger, panel], close, open)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null)
+      return
+    }
+    const anchor = trigger.current?.getBoundingClientRect()
+    const box = panel.current?.getBoundingClientRect()
+    if (!anchor || !box) return
+    const preferredLeft =
+      align === 'right' ? anchor.right - box.width : anchor.left
+    const below = anchor.bottom + GAP
+    const fitsBelow = below + box.height <= window.innerHeight - EDGE
+    const top = fitsBelow
+      ? below
+      : Math.max(EDGE, anchor.top - box.height - GAP)
+    const left = Math.max(
+      EDGE,
+      Math.min(preferredLeft, window.innerWidth - box.width - EDGE),
+    )
+    setPosition({ top, left })
+  }, [align, open])
+
+  useEffect(() => {
+    if (!open) return
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [close, open])
+
   return (
-    <div ref={root} className="relative">
+    <div ref={trigger} className="relative">
       <IconButton
         icon={icon}
         label={label}
@@ -92,16 +139,18 @@ export function DropdownMenu({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       />
-      {open && (
-        <div
-          className={cn(
-            'absolute top-11 z-40',
-            align === 'right' ? 'right-0' : 'left-0',
-          )}
-        >
-          <MenuList items={items} onClose={close} />
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            className="fixed z-[60]"
+            // Hidden until measured, so it never flashes at the wrong place.
+            style={position ?? { top: 0, left: 0, visibility: 'hidden' }}
+          >
+            <MenuList items={items} onClose={close} />
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

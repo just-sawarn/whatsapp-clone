@@ -15,7 +15,9 @@ import { passwordStrength } from '../../auth/authSchemas'
 import { useEncryptionPrompt } from '../../auth/EncryptionPromptContext'
 import { PasswordStrengthMeter } from '../../auth/PasswordStrengthMeter'
 import { useCurrentUserId } from '../../auth/useCurrentUser'
-import { SettingsCard, SettingsPanel } from '../SettingsPanel'
+import { usePreferences } from '../../preferences/PreferencesContext'
+import { Switch } from '../../../components/ui/Switch'
+import { SettingRow, SettingsCard, SettingsPanel } from '../SettingsPanel'
 
 const passwordSchema = z
   .object({
@@ -60,8 +62,14 @@ function browserName(): string {
 
 export function SecuritySection() {
   const userId = useCurrentUserId()
-  const { identityState, exportKeyBackup, importKeyBackup, changePassword } =
-    useAuth()
+  const {
+    identityState,
+    exportKeyBackup,
+    importKeyBackup,
+    changePassword,
+    loginExpiresAt,
+  } = useAuth()
+  const { stayUnlocked, update } = usePreferences()
   const prompt = useEncryptionPrompt()
   const { notify } = useToast()
   const picker = useRef<HTMLInputElement>(null)
@@ -93,7 +101,7 @@ export function SecuritySection() {
       )
       const link = document.createElement('a')
       link.href = url
-      link.download = 'whatsapp-key-backup.json'
+      link.download = 'chatbit-key-backup.json'
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
     } catch (error) {
@@ -133,6 +141,33 @@ export function SecuritySection() {
 
   return (
     <SettingsPanel title="Security">
+      <SettingsCard
+        title="Staying signed in"
+        description="You sign in once and stay signed in for 7 days. Your encryption key is unlocked with your password at sign-in, and can stay unlocked on this device for the same period so reloading the page does not ask again."
+      >
+        <SettingRow
+          label="Stay unlocked on this device"
+          description={
+            loginExpiresAt
+              ? `Your login ends on ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(loginExpiresAt))}, or sooner if you log out.`
+              : undefined
+          }
+          control={
+            <Switch
+              label="Stay unlocked on this device"
+              checked={stayUnlocked}
+              onChange={(value) => update({ stayUnlocked: value })}
+            />
+          }
+        />
+        <p className="text-[12.5px] leading-relaxed text-muted">
+          While this is on, an unlocked copy of your key that scripts cannot
+          read out (but this browser can use) is kept on this device. Anyone who
+          can use this browser profile could read your messages until the login
+          ends. Turn it off on shared or public computers. Logging out always
+          removes it.
+        </p>
+      </SettingsCard>
       <SettingsCard
         title="Your encryption key"
         description="Messages are encrypted with a key that is created on this device and protected by your password. Only the public half is stored on the server."

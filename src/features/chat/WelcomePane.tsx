@@ -7,7 +7,7 @@ export default function WelcomePane() {
       <span className="grid h-24 w-24 place-items-center rounded-full bg-surface text-muted">
         <Icon icon={MessageCircle} size={44} strokeWidth={1.25} />
       </span>
-      <h2 className="mt-2 text-[30px] font-light">WhatsApp for web</h2>
+      <h2 className="mt-2 text-[30px] font-light">ChatBit for web</h2>
       <p className="max-w-md text-[14.5px] leading-relaxed text-muted">
         Send and receive messages, share photos and files, and call your
         contacts. Choose a chat to get started.

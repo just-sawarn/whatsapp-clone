@@ -4,10 +4,14 @@ import { cn } from '../../lib/cn'
 
 type AvatarProps = {
   name: string
-  /** Object path inside the private `avatars` bucket. */
+  /** Object path inside `bucket`. */
   path?: string | null
+  /** Which private bucket the path is in: profile photos or group/community photos. */
+  bucket?: string
   size?: number
   online?: boolean
+  /** Communities use a rounded square to tell them apart from people and groups. */
+  shape?: 'circle' | 'square'
   className?: string
 }
 
@@ -31,11 +35,14 @@ function colorFor(name: string): string {
 export function Avatar({
   name,
   path,
+  bucket = buckets.avatars,
   size = 48,
   online = false,
+  shape = 'circle',
   className,
 }: AvatarProps) {
-  const { data: url } = useSignedUrl(buckets.avatars, path)
+  const rounding = shape === 'square' ? 'rounded-[28%]' : 'rounded-full'
+  const { data: url } = useSignedUrl(bucket, path)
   return (
     <span
       className={cn('relative inline-block shrink-0', className)}
@@ -45,13 +52,16 @@ export function Avatar({
         <img
           src={url}
           alt=""
-          className="h-full w-full rounded-full object-cover"
+          className={cn('h-full w-full object-cover', rounding)}
           loading="lazy"
         />
       ) : (
         <span
           aria-hidden="true"
-          className="grid h-full w-full place-items-center rounded-full font-medium text-white"
+          className={cn(
+            'grid h-full w-full place-items-center font-medium text-white',
+            rounding,
+          )}
           style={{ backgroundColor: colorFor(name), fontSize: size * 0.38 }}
         >
           {initials(name)}

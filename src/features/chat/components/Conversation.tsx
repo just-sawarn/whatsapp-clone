@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type DragEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { LockKeyhole, MessageCircleOff } from 'lucide-react'
+import { LockKeyhole, Megaphone, MessageCircleOff } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { Skeleton } from '../../../components/ui/Skeleton'
@@ -235,29 +235,38 @@ export function Conversation({ chatId }: { chatId: string }) {
             }}
           />
         )}
-        <Composer
-          onSend={(text, linkPreview) => {
-            send({ text, linkPreview, replyToId: reply?.id ?? null })
-            setReply(null)
-          }}
-          onSendVoice={(recording) =>
-            send({
-              attachment: {
-                blob: recording.blob,
-                name: 'Voice message',
-                mime: recording.mime,
-                durationSeconds: recording.seconds,
-              },
-              replyToId: reply?.id ?? null,
-            })
-          }
-          onPickFiles={pickFiles}
-          onTyping={notifyTyping}
-          reply={reply}
-          replyName={reply ? names.get(reply.senderId) : undefined}
-          onCancelReply={() => setReply(null)}
-          disabled={locked || isPending}
-        />
+        {chat.canPost ? (
+          <Composer
+            onSend={(text, linkPreview) => {
+              send({ text, linkPreview, replyToId: reply?.id ?? null })
+              setReply(null)
+            }}
+            onSendVoice={(recording) =>
+              send({
+                attachment: {
+                  blob: recording.blob,
+                  name: 'Voice message',
+                  mime: recording.mime,
+                  durationSeconds: recording.seconds,
+                },
+                replyToId: reply?.id ?? null,
+              })
+            }
+            onPickFiles={pickFiles}
+            onTyping={notifyTyping}
+            reply={reply}
+            replyName={reply ? names.get(reply.senderId) : undefined}
+            onCancelReply={() => setReply(null)}
+            disabled={locked || isPending}
+          />
+        ) : (
+          <div className="flex shrink-0 items-center justify-center gap-2 bg-panel px-4 py-4 text-center text-[13.5px] text-muted">
+            <Megaphone size={16} strokeWidth={1.75} aria-hidden="true" />
+            <span>
+              Only community admins can send messages in announcements.
+            </span>
+          </div>
+        )}
       </div>
       {infoOpen && (
         <ChatInfoPanel chat={chat} onClose={() => setInfoOpen(false)} />

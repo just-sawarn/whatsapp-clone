@@ -42,11 +42,20 @@ export async function setup() {
   process.env.VITE_SUPABASE_URL = `http://localhost:${PROXY_PORT}`
   process.env.VITE_SUPABASE_ANON_KEY = 'test-anon-key'
   const outDir = mkdtempSync(join(tmpdir(), 'wa-e2e-dist-'))
-  await build({
-    envDir: mkdtempSync(join(tmpdir(), 'wa-e2e-env-')),
-    build: { outDir, emptyOutDir: true },
-    logLevel: 'error',
-  })
+  // Vitest sets NODE_ENV=test, which Vite would inherit and produce a development-mode bundle. Force a real
+  // production build, then restore the variable for the rest of the run.
+  const previousEnv = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    await build({
+      mode: 'production',
+      envDir: mkdtempSync(join(tmpdir(), 'wa-e2e-env-')),
+      build: { outDir, emptyOutDir: true },
+      logLevel: 'error',
+    })
+  } finally {
+    process.env.NODE_ENV = previousEnv
+  }
   const csp = shippedCsp()
 
   server = createServer((request, response) => {

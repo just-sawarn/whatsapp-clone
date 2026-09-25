@@ -39,3 +39,14 @@ export async function imageDimensions(
     return null
   }
 }
+
+const MAX_PHOTO_SOURCE_BYTES = 8 * 1024 * 1024
+
+/** Why a file cannot be used as a photo, or null when it can. */
+export function photoRejection(file: File): string | null {
+  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml')
+    return 'Choose a photo (JPEG, PNG or WebP).'
+  if (file.size > MAX_PHOTO_SOURCE_BYTES)
+    return 'That image is larger than 8 MB.'
+  return null
+}

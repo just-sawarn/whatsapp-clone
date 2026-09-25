@@ -1,8 +1,11 @@
 import { useEffect, type RefObject } from 'react'
 
-/** Calls onDismiss on Escape or on a pointer press outside the referenced element. */
+/**
+ * Calls onDismiss on Escape or on a pointer press outside the referenced element(s). Pass several refs when
+ * the popup is rendered elsewhere in the DOM (a portal) from its trigger.
+ */
 export function useDismiss(
-  ref: RefObject<HTMLElement | null>,
+  ref: RefObject<HTMLElement | null> | RefObject<HTMLElement | null>[],
   onDismiss: () => void,
   active = true,
 ): void {
@@ -12,8 +15,11 @@ export function useDismiss(
       if (event.key === 'Escape') onDismiss()
     }
     const onPointer = (event: PointerEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
-        onDismiss()
+      const refs = Array.isArray(ref) ? ref : [ref]
+      const inside = refs.some((item) =>
+        item.current?.contains(event.target as Node),
+      )
+      if (!inside) onDismiss()
     }
     document.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onPointer)

@@ -12,4 +12,8 @@ export const keys = {
   statuses: (userId: string) => ['statuses', userId] as const,
   calls: (userId: string) => ['calls', userId] as const,
   media: (messageId: string) => ['media', messageId] as const,
+  communities: (userId: string) => ['communities', userId] as const,
+  communityGroups: (communityId: string) =>
+    ['community-groups', communityId] as const,
+  invitePreview: (code: string) => ['invite-preview', code] as const,
 }

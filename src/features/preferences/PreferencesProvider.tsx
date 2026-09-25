@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { wallpapers } from '../../design/tokens'
+import { setSoundVolume } from '../../lib/sounds'
 import {
   PreferencesContext,
   defaultPreferences,
@@ -55,6 +56,16 @@ function readPreferences(): Preferences {
           ? saved.sentSound
           : defaultPreferences.sentSound,
       notificationBannerDismissed: saved.notificationBannerDismissed === true,
+      stayUnlocked:
+        typeof saved.stayUnlocked === 'boolean'
+          ? saved.stayUnlocked
+          : defaultPreferences.stayUnlocked,
+      soundVolume:
+        typeof saved.soundVolume === 'number' &&
+        saved.soundVolume >= 0.1 &&
+        saved.soundVolume <= 1
+          ? saved.soundVolume
+          : defaultPreferences.soundVolume,
     }
   } catch {
     return defaultPreferences
@@ -78,6 +89,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
   }, [])
+
+  useEffect(() => {
+    setSoundVolume(preferences.soundVolume)
+  }, [preferences.soundVolume])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedDark)

@@ -148,7 +148,7 @@ export function ChatList({ selectedChatId, onNewChat, onNewGroup }: Props) {
             <h1 className="text-xl font-medium">Archived</h1>
           </div>
         ) : (
-          <h1 className="text-[22px] font-semibold">WhatsApp</h1>
+          <h1 className="text-[22px] font-semibold">ChatBit</h1>
         )}
         <div className="flex items-center gap-1">
           <IconButton

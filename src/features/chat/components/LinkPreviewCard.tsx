@@ -1,6 +1,6 @@
 import type { LinkPreview } from '../linkPreview'
 
-/** WhatsApp-style card: thumbnail on top, bold title, clamped description, and the domain. */
+/** Link preview card: thumbnail on top, bold title, clamped description, and the domain. */
 export function LinkPreviewCard({
   preview,
   url,

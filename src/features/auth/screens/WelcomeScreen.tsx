@@ -36,7 +36,7 @@ export function WelcomeScreen({ onCreate, onLogin }: Props) {
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2, type: 'spring', stiffness: 220, damping: 22 }}
       >
-        <h1 className="text-[28px] font-semibold">Welcome to WhatsApp</h1>
+        <h1 className="text-[28px] font-semibold">Welcome to ChatBit</h1>
         <p className="mx-auto mt-2 max-w-xs text-[14.5px] leading-relaxed text-muted">
           Private messaging with end-to-end encryption, voice and video calls,
           and status updates.

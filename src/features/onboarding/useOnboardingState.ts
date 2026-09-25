@@ -24,7 +24,7 @@ const initial: Stored = {
   step: 'profile',
   displayName: '',
   username: '',
-  about: 'Hey there! I am using WhatsApp.',
+  about: 'Hey there! I am using ChatBit.',
   avatarPath: null,
 }
 const keyFor = (userId: string) => `wa:onboarding:${userId}`

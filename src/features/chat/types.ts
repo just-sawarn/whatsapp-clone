@@ -47,6 +47,8 @@ export type ChatSummary = {
   peerId: string | null
   peerUsername: string | null
   avatarPath: string | null
+  /** Group photos live in their own bucket, separate from profile photos. */
+  avatarBucket: string
   isPinned: boolean
   isArchived: boolean
   isMuted: boolean
@@ -54,6 +56,12 @@ export type ChatSummary = {
   unreadCount: number
   participantCount: number
   peerLastSeen: string | null
+  /** An announcements chat: only admins can post. */
+  isAnnouncement: boolean
+  /** False for members of an announcements chat, who can read but not send. */
+  canPost: boolean
+  communityId: string | null
+  communityName: string | null
   lastMessage: MessagePreview | null
 }
 

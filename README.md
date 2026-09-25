@@ -1,6 +1,6 @@
-# WhatsApp Web Clone
+# ChatBit
 
-A private, end-to-end encrypted messenger for the web. React 18 + Vite + TypeScript + Tailwind on the front end; Supabase (Postgres with Row Level Security, Auth, Realtime, Storage, Edge Functions) on the back end; WebRTC for voice and video calls.
+ChatBit is a private, end-to-end encrypted messenger for the web. React 18 + Vite + TypeScript + Tailwind on the front end; Supabase (Postgres with Row Level Security, Auth, Realtime, Storage, Edge Functions) on the back end; WebRTC for voice and video calls.
 
 ## What is in it
 
@@ -9,14 +9,15 @@ A private, end-to-end encrypted messenger for the web. React 18 + Vite + TypeScr
 | Accounts | Email/password sign-up with strength meter, email verification, password reset, animated multi-step onboarding (photo, name, `@username`, about, permissions priming, key generation) |
 | Chat | 1:1 and group chats, realtime delivery, sent/delivered/read ticks, typing and online/last-seen, unread badges, pin (max 3) / archive / mute / mark unread, filters, chat and message search |
 | Messages | Text, photos, files, voice notes (live waveform), emoji, reply, forward, delete for me / for everyone (1 hour), star, reactions, link previews, drag-and-drop and paste |
-| Groups | Create from usernames, add/remove members, admins, rename, leave (admin hands over automatically), 256 members |
+| Groups | Create from usernames with an optional photo, add/remove members, admins, rename, group photo (admins), leave (admin hands over automatically), 256 members |
+| Communities | An announcements group only admins can post in, plus linked groups members can join; photo, description, invite links, member management, leave/deactivate; all messages end-to-end encrypted |
 | Contacts | Discovery by exact `@username` or email (server-enforced privacy setting), contact list, blocking |
 | Status | 24-hour text and photo statuses, story viewer, viewers list, audience = mutual contacts |
 | Calls | 1:1 voice and video over WebRTC, ringing, accept/decline, mute/camera/speaker, reconnect on network drops, call history |
 | Settings | Profile, privacy (last seen, read receipts, photo visibility, discoverability, blocked list), notifications and sounds, theme / wallpaper / font size, local cache, security (key fingerprint, backup, password change), starred messages, delete account |
-| Notifications | In-app sounds, browser notifications, optional background Web Push |
+| Notifications | Loud in-app sounds and call ringtone (with a volume setting), browser notifications, optional background Web Push |
 
-**Not included:** Communities (the page is a placeholder), group calls, automatic multi-device sync, message editing, disappearing messages.
+**Not included:** group calls, automatic multi-device sync, message editing, disappearing messages.
 
 ## Encryption, honestly
 
@@ -25,11 +26,23 @@ Messages use ECDH P-256 key agreement and AES-GCM, through the Web Crypto API on
 This is real encryption but a simplified scheme: **no forward secrecy or ratcheting** (Signal-style), and no audit. Things to know:
 
 - **Search is local.** Ciphertext cannot be searched on the server, so search runs over a per-account cache of messages this device has already decrypted (Settings → Storage and data to clear it). Results are limited to what this device has seen.
+- **Sign in once, stay signed in for 7 days.** You enter your password at login, which unlocks the key. The login lasts 7 days from sign-in (not extended by activity), after which you are signed out and asked to sign in again. By default the unlocked key is also kept on the device for that period so a page reload does not ask for the password again: it is stored as a non-extractable key (page scripts can use it but not read it out) and is deleted on logout, on expiry, or if you turn off *Settings → Security → Stay unlocked on this device*. The trade-off: anyone who can use your browser profile during those 7 days can read your messages, so turn it off on shared computers. Supabase keeps refreshing the token in the background, so the app enforces the 7 days itself; also set *Time-box user sessions* to 7 days in Supabase Auth settings if your plan has it, so the server enforces it too.
 - **Keys live on the device.** Clearing browser data loses the key. Use Settings → Security → Download backup. The backup is password-protected; restore it on a new device to read your history.
 - **Verify contacts.** Contact info → *Verify security code* shows a 60-digit code derived from both public keys. If it matches on both devices, no one substituted a key.
 - **Not encrypted:** message metadata (who, when, which chat, message type), reactions, statuses (text and photos), and profile fields. Link previews are fetched server-side (the function sees the URL, not your message) and then embedded in the encrypted message.
 - **Call signalling** runs over a Realtime broadcast channel named by an unguessable call id; media is protected by WebRTC's DTLS-SRTP. It is not tied to your identity keys.
 - **Presence** is broadcast to signed-in users on one channel; if you hide last seen you neither publish nor see it.
+
+## What the browser can and cannot hide
+
+Anything the browser runs or sends is visible to the person using that browser: DevTools cannot be reliably blocked, and tricks such as disabling right-click or detecting an open panel are trivial to bypass while breaking copy/paste, spellcheck and accessibility, so this app does not use them. Instead it makes sure there is nothing sensitive to find:
+
+- **The console is silent in production.** Production builds strip every `console.*` call and `debugger` statement, from the app and from libraries, and ship no source maps. A test intercepts every console method in the built app through sign-in failures, onboarding, messaging, reloads and failed requests, and fails if anything is printed.
+- **The Network tab shows only what the server already holds.** Message text and attachments travel and are stored as ciphertext; the server never has the keys. Row Level Security decides what any request can return, so seeing a request reveals nothing the user was not already allowed to read. The anon key and project URL are public by design.
+- **The remaining exposure is metadata** (who is in which chat, message times and sizes), described under "Encryption, honestly".
+- **A strict Content-Security-Policy** (in `public/.htaccess`) stops injected scripts from sending data elsewhere, which is the real threat to a user's data.
+
+Development builds keep their console output for debugging. Errors in production are silent by design; add an error-reporting service if you want to see them.
 
 ## Setup
 
@@ -57,7 +70,7 @@ Never put a Supabase service-role key in the front end. The anon key is meant fo
 
 ### Database
 
-Apply every migration in `supabase/migrations` in order (`0001` to `0009`). They create the schema, all RLS policies, the private storage buckets (`avatars`, `chat-media`, `status-media`) with their policies, the Realtime publication, and the database functions the app calls (`chat_overview`, `get_or_create_*_chat`, `mark_chat_read`, `find_profile`, ...).
+Apply every migration in `supabase/migrations` in order (`0001` to `0011`). They create the schema, all RLS policies, the private storage buckets (`avatars` for profile photos, `chat-avatars` for group and community photos, `chat-media` for encrypted attachments, `status-media`) with their policies, the Realtime publication, and the database functions the app calls (`chat_overview`, `get_or_create_*_chat`, `mark_chat_read`, `find_profile`, ...).
 
 ```bash
 npx supabase login
@@ -116,7 +129,7 @@ npm run test:all      # everything except the prod e2e run
 
 The Docker suites use a local stack, never your real Supabase project. They cover: RLS (a non-member cannot read or write another chat), end-to-end encryption round trips including tampering and key substitution, message actions, groups, statuses, storage policies, the call state machine, real WebRTC negotiation between two Chrome pages, and the SSRF guard. Screenshots from the browser runs land in `tests/e2e/screenshots`.
 
-What the local stack does **not** exercise: Supabase Realtime (so live updates, presence, typing and call ringing are not tested against a real server), Storage uploads, and Auth. The browser tests therefore reload and unlock to see another user's changes.
+What the local stack does **not** exercise: Supabase Realtime (so live updates, presence, typing and call ringing are not tested against a real server) and the real Auth server. Storage is replaced by a small in-memory stand-in in the test proxy: it lets the browser tests exercise real uploads, signed URLs and downloads (and inspect the bytes a server operator would hold, which for attachments are ciphertext) but it does not enforce access policies; the SQL tests do. The browser tests therefore reload to see another user's changes.
 
 ## Production build and Hostinger
 

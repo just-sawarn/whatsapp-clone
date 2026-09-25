@@ -1,5 +1,5 @@
 /**
- * Single source of truth for the WhatsApp-style palette. Tailwind reads the names from here and a
+ * Single source of truth for the ChatBit palette. Tailwind reads the names from here and a
  * base-layer plugin emits them as CSS variables, so components use `bg-panel`, `text-muted`, etc.
  * and never hard-code a hex value. Values are space-separated RGB channels for alpha support.
  */

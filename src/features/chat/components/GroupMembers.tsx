@@ -155,7 +155,8 @@ export function GroupMembers({ chat }: { chat: ChatSummary }) {
         })}
       </ul>
       <div className="grid gap-1 border-t border-divider p-2">
-        {isAdmin && (
+        {/* A community's announcements chat is renamed from the community itself. */}
+        {isAdmin && !chat.isAnnouncement && (
           <Button
             variant="ghost"
             className="justify-start"
@@ -173,7 +174,7 @@ export function GroupMembers({ chat }: { chat: ChatSummary }) {
           className="justify-start text-danger"
           onClick={() => void actions.deleteChat(chat)}
         >
-          Exit group
+          {chat.isAnnouncement ? 'Leave community' : 'Exit group'}
         </Button>
       </div>
       <Modal

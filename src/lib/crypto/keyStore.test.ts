@@ -1,7 +1,19 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  exportPublicKey,
+  generateIdentityKeyPair,
+  importPublicKey,
+  unwrapMessageKey,
+  wrapMessageKey,
+  generateMessageKey,
+} from './crypto'
+import {
   exportKeyBackup,
+  forgetIdentity,
+  forgetRemembered,
+  restoreUnlockedIdentity,
+  setRememberDeadline,
   getActivePrivateKey,
   getIdentityState,
   getStoredPublicKey,
@@ -78,5 +90,98 @@ describe('key backup', () => {
     await expect(
       importKeyBackup(userId, JSON.stringify({ app: 'other', version: 1 })),
     ).rejects.toThrow(/not a valid key backup/)
+  })
+})
+
+describe('staying unlocked across page loads', () => {
+  const HOUR = 60 * 60 * 1000
+
+  it('brings the key back after a reload until the deadline, and it still decrypts', async () => {
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await initializeIdentity(userId, 'pw')
+
+    // A reload empties memory but leaves IndexedDB.
+    lockIdentities()
+    expect(await getIdentityState(userId)).toBe('locked')
+    expect(await restoreUnlockedIdentity(userId)).toBe(true)
+    expect(await getIdentityState(userId)).toBe('unlocked')
+
+    // The restored key is a working private key: something sealed to this identity opens with it.
+    const sender = await generateIdentityKeyPair()
+    const mine = await importPublicKey(
+      (await getStoredPublicKey(userId)) as JsonWebKey,
+    )
+    const messageKey = await generateMessageKey()
+    const wrapped = await wrapMessageKey(messageKey, sender.privateKey, mine)
+    const restoredKey = getActivePrivateKey(userId) as CryptoKey
+    const opened = await unwrapMessageKey(
+      wrapped,
+      restoredKey,
+      await importPublicKey(await exportPublicKey(sender.publicKey)),
+    )
+    expect(opened).toBeDefined()
+    expect(restoredKey.extractable).toBe(false)
+  })
+
+  it('does not restore an expired key and removes it', async () => {
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await initializeIdentity(userId, 'pw')
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId, Date.now() + 2 * HOUR)).toBe(
+      false,
+    )
+    // The expired entry was deleted, so even "now" no longer restores it.
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+    expect(await getIdentityState(userId)).toBe('locked')
+  })
+
+  it('remembers nothing unless a deadline was set', async () => {
+    await initializeIdentity(userId, 'pw')
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+  })
+
+  it('forgets on sign-out or opt-out, and when the deadline is cleared', async () => {
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await initializeIdentity(userId, 'pw')
+    await forgetRemembered(userId)
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await unlockStoredIdentity(userId, 'pw')
+    await setRememberDeadline(userId, null)
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+  })
+
+  it('remembers an already-unlocked key as soon as the setting is turned on', async () => {
+    await initializeIdentity(userId, 'pw')
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(true)
+  })
+
+  it('does not keep using a remembered key after the identity is replaced or deleted', async () => {
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await initializeIdentity(userId, 'pw')
+    const backup = await exportKeyBackup(userId)
+    await importKeyBackup(userId, backup)
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+
+    await unlockStoredIdentity(userId, 'pw')
+    await forgetIdentity(userId)
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(false)
+    expect(await getIdentityState(userId)).toBe('missing')
+  })
+
+  it('tracks a password change so the remembered key is the current one', async () => {
+    await setRememberDeadline(userId, Date.now() + HOUR)
+    await initializeIdentity(userId, 'old')
+    await rewrapIdentity(userId, 'old', 'new')
+    lockIdentities()
+    expect(await restoreUnlockedIdentity(userId)).toBe(true)
   })
 })

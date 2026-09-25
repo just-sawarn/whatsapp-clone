@@ -1,7 +1,17 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, BellOff, LockKeyhole, ShieldCheck, Trash2, X } from 'lucide-react'
+import {
+  Ban,
+  BellOff,
+  LockKeyhole,
+  ShieldCheck,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../../../components/ui/Avatar'
+import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
 import { Icon } from '../../../components/ui/Icon'
 import { IconButton } from '../../../components/ui/IconButton'
@@ -12,6 +22,8 @@ import { supabase } from '../../../lib/supabase'
 import { useCurrentUserId } from '../../auth/useCurrentUser'
 import { setBlocked } from '../../contacts/contactsService'
 import { useContacts } from '../../contacts/useContacts'
+import { useChatAvatar } from '../useChatAvatar'
+import { useParticipants } from '../useChatData'
 import { useChatActions } from '../useChatActions'
 import type { ChatSummary } from '../types'
 import { GroupMembers } from './GroupMembers'
@@ -39,6 +51,16 @@ export function ChatInfoPanel({
   const queryClient = useQueryClient()
   const { notify } = useToast()
   const actions = useChatActions()
+  const { data: participants } = useParticipants(chat.id, chat.isGroup)
+  const photo = useChatAvatar(chat.id, chat.avatarPath)
+  // Only admins of a group can change its photo; the database enforces the same rule.
+  const canEditPhoto =
+    chat.isGroup &&
+    participants?.some(
+      (participant) =>
+        participant.userId === userId && participant.role === 'admin',
+    ) === true
+  const navigate = useNavigate()
   const { data: contacts = [] } = useContacts()
   const [verifying, setVerifying] = useState(false)
   const peerId = chat.peerId
@@ -77,7 +99,25 @@ export function ChatInfoPanel({
         </h2>
       </header>
       <div className="grid justify-items-center gap-1 px-6 py-6 text-center">
-        <Avatar name={chat.name} path={chat.avatarPath} size={140} />
+        {chat.isGroup ? (
+          <AvatarPicker
+            name={chat.name}
+            path={chat.avatarPath}
+            bucket={chat.avatarBucket}
+            size={140}
+            busy={photo.busy}
+            disabled={!canEditPhoto}
+            onPick={(file) => void photo.upload(file)}
+            onRemove={() => void photo.remove()}
+          />
+        ) : (
+          <Avatar
+            name={chat.name}
+            path={chat.avatarPath}
+            bucket={chat.avatarBucket}
+            size={140}
+          />
+        )}
         <h3 className="mt-3 text-[22px]">{chat.name}</h3>
         {chat.peerUsername && (
           <p className="text-[15px] text-muted">@{chat.peerUsername}</p>
@@ -99,6 +139,18 @@ export function ChatInfoPanel({
           <Icon icon={LockKeyhole} size={20} />
           <span>Messages are end-to-end encrypted.</span>
         </div>
+        {chat.communityId && (
+          <button
+            type="button"
+            onClick={() => navigate(`/communities/${chat.communityId}`)}
+            className="flex items-center gap-4 px-6 py-3 text-left text-[15px] hover:bg-surface-hover"
+          >
+            <Icon icon={Users} size={20} className="text-link" />
+            {chat.isAnnouncement
+              ? 'Open community'
+              : `Part of ${chat.communityName}`}
+          </button>
+        )}
         {!chat.isGroup && peerId && (
           <button
             type="button"

@@ -64,6 +64,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       () => void queryClient.invalidateQueries({ queryKey: ['statuses'] }),
       500,
     )
+    const refreshCommunities = debounce(() => {
+      void queryClient.invalidateQueries({ queryKey: ['communities'] })
+      void queryClient.invalidateQueries({ queryKey: ['community-groups'] })
+    }, 400)
     const deliver = debounce(
       () => void markMessagesDelivered().catch(() => undefined),
       800,
@@ -130,12 +134,25 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'chats' },
-        refreshChats,
+        () => {
+          refreshChats()
+          refreshCommunities()
+        },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'statuses' },
         refreshStatuses,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'communities' },
+        refreshCommunities,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_groups' },
+        refreshCommunities,
       )
       .subscribe()
 
@@ -154,6 +171,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         refreshReactions,
         refreshParticipants,
         refreshStatuses,
+        refreshCommunities,
         deliver,
       ])
         task.cancel()

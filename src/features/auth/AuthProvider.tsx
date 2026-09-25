@@ -11,16 +11,28 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import {
   exportKeyBackup as exportBackup,
+  forgetRemembered,
   getIdentityState,
   importKeyBackup as importBackup,
   initializeIdentity,
   lockIdentities,
+  restoreUnlockedIdentity,
+  setRememberDeadline,
   resetIdentity,
   rewrapIdentity,
   unlockStoredIdentity,
   type IdentityState,
 } from '../../lib/crypto/keyStore'
 import { clearCache } from '../../lib/messageCache'
+import {
+  clearLogin,
+  ensureLoginRecorded,
+  isLoginExpired,
+  loginExpiresAt as loginEndsAt,
+  loginStartedAt,
+  recordLogin,
+} from '../../lib/sessionPolicy'
+import { usePreferences } from '../preferences/PreferencesContext'
 import { getProfile, publishPublicKey, touchLastSeen } from '../../lib/profile'
 import {
   AuthContext,
@@ -47,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null)
   const [identityState, setIdentityState] = useState<IdentityState | null>(null)
   const [recoveryMode, setRecoveryMode] = useState(false)
+  const [loginExpiresAt, setLoginExpiresAt] = useState<number | null>(null)
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null)
+  const { stayUnlocked } = usePreferences()
   const userIdRef = useRef<string | undefined>(undefined)
   const userId = session?.user.id
   userIdRef.current = userId
@@ -71,20 +86,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // On a fresh page load the key is not in memory: work out whether it is locked or missing.
+  /**
+   * Ends the login: locks and forgets the key (including the copy remembered for reloads), clears local caches
+   * and signs out. Used by the sign-out button, the 7-day expiry, and other tabs.
+   */
+  const endLogin = useCallback(
+    async (notice: string | null = null): Promise<void> => {
+      const id = userIdRef.current
+      if (id) touchLastSeen(id)
+      lockIdentities()
+      if (id) {
+        await forgetRemembered(id)
+        await setRememberDeadline(id, null)
+        clearLogin(id)
+        await clearCache(id).catch(() => undefined)
+      }
+      queryClient.clear()
+      setSessionNotice(notice)
+      if (!supabase) return
+      const { error } = await supabase.auth.signOut()
+      if (error) setAuthError(messageOf(error))
+    },
+    [queryClient],
+  )
+
+  const expireLogin = useCallback(
+    () => endLogin('Your session expired after 7 days. Please sign in again.'),
+    [endLogin],
+  )
+
+  // On a fresh page load the key is not in memory. Bring back the one remembered for this login (if the user allows
+  // it and it has not expired), then work out whether the identity is unlocked, locked or missing.
   useEffect(() => {
     if (!userId) {
+      lockIdentities()
       setIdentityState(null)
+      setLoginExpiresAt(null)
       return
     }
+    const startedAt = ensureLoginRecorded(userId)
+    if (isLoginExpired(startedAt)) {
+      void expireLogin()
+      return
+    }
+    setLoginExpiresAt(loginEndsAt(startedAt))
     let active = true
-    void getIdentityState(userId).then((state) => {
+    void (async () => {
+      await setRememberDeadline(
+        userId,
+        stayUnlocked ? loginEndsAt(startedAt) : null,
+      )
+      await restoreUnlockedIdentity(userId)
+      const state = await getIdentityState(userId)
       if (active) setIdentityState(state)
-    })
+    })()
     return () => {
       active = false
     }
-  }, [userId])
+  }, [expireLogin, stayUnlocked, userId])
+
+  // Enforce the 7-day limit while the app stays open: every minute, and as soon as the tab is used again.
+  useEffect(() => {
+    if (!userId) return
+    const check = () => {
+      const startedAt = loginStartedAt(userId) ?? ensureLoginRecorded(userId)
+      if (isLoginExpired(startedAt)) void expireLogin()
+    }
+    const timer = window.setInterval(check, 60_000)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [expireLogin, userId])
+
+  /** A password sign-in or sign-up starts a fresh 7-day login and decides whether the key is remembered. */
+  const beginLogin = useCallback(
+    async (id: string): Promise<void> => {
+      const startedAt = recordLogin(id)
+      setLoginExpiresAt(loginEndsAt(startedAt))
+      setSessionNotice(null)
+      await setRememberDeadline(
+        id,
+        stayUnlocked ? loginEndsAt(startedAt) : null,
+      )
+    },
+    [stayUnlocked],
+  )
 
   /**
    * After a password sign-in: unlock the local key, or create one for a brand-new account. If the account
@@ -131,11 +219,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthError(messageOf(error))
         return false
       }
-      if (data.user)
+      if (data.user) {
+        await beginLogin(data.user.id)
         setIdentityState(await prepareIdentity(data.user.id, password))
+      }
       return true
     },
-    [prepareIdentity],
+    [beginLogin, prepareIdentity],
   )
 
   const signUp = useCallback(
@@ -155,10 +245,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return 'error'
       }
       if (!data.session || !data.user) return 'confirm-email'
+      await beginLogin(data.user.id)
       setIdentityState(await prepareIdentity(data.user.id, password))
       return 'signed-in'
     },
-    [prepareIdentity],
+    [beginLogin, prepareIdentity],
   )
 
   const resendVerification = useCallback(
@@ -313,16 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session],
   )
 
-  const signOut = useCallback(async (): Promise<void> => {
-    const id = userIdRef.current
-    if (id) touchLastSeen(id)
-    lockIdentities()
-    if (id) await clearCache(id).catch(() => undefined)
-    queryClient.clear()
-    if (!supabase) return
-    const { error } = await supabase.auth.signOut()
-    if (error) setAuthError(messageOf(error))
-  }, [queryClient])
+  const signOut = useCallback(() => endLogin(), [endLogin])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -332,6 +414,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authError,
       clearError: () => setAuthError(null),
       identityState,
+      loginExpiresAt,
+      sessionNotice,
       recoveryMode,
       signIn,
       signUp,
@@ -349,6 +433,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       session,
       loading,
+      loginExpiresAt,
+      sessionNotice,
       authError,
       identityState,
       recoveryMode,
