@@ -47,6 +47,15 @@ export async function hasStoredIdentity(userId: string): Promise<boolean> {
   return (await db.get('identities', userId)) !== undefined
 }
 
+export async function unlockStoredIdentity(userId: string, password: string): Promise<boolean> {
+  const db = await database
+  const record = await db.get('identities', userId)
+  if (!record) return false
+  const privateKey = await unwrapPrivateKey(record, password)
+  activePrivateKeys.set(userId, privateKey)
+  return true
+}
+
 export function getActivePrivateKey(userId: string): CryptoKey | null {
   return activePrivateKeys.get(userId) ?? null
 }

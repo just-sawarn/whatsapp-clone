@@ -11,6 +11,7 @@ export type AuthContextValue = {
   signUp: (email: string, password: string) => Promise<boolean>
   resetPassword: (email: string) => Promise<boolean>
   initializeEncryption: (password: string) => Promise<boolean>
+  unlockEncryption: (password: string) => Promise<boolean>
   signOut: () => Promise<void>
 }
 

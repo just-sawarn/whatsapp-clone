@@ -51,9 +51,17 @@ npm run lint
 npm run build
 ```
 
+Or run the complete pre-deploy check in one command:
+
+```bash
+npm run check
+```
+
 The deployable output is `dist/`. Upload the contents of `dist/`, including `.htaccess`, into Hostinger's `public_html` directory. Do not upload `.env`, `node_modules`, or the source directory.
 
 The included `public/.htaccess` provides SPA history fallback, long-lived caching for hashed assets, compression where Apache supports it, and browser security headers compatible with camera, microphone, Supabase, and WebRTC usage.
+
+The production bundle also includes `sw.js` for the service worker. Upload the entire contents of `dist/` so both `.htaccess` and `sw.js` remain at the `public_html` root. Build-time `VITE_*` values are embedded into the bundle; never upload `.env` or a Supabase service-role key.
 
 ## Hostinger deployment
 

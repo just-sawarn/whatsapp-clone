@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import App from './App'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { ProfileGate } from './components/ProfileGate'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import AuthPage from './features/auth/AuthPage'
 import { AuthProvider } from './features/auth/AuthProvider'
 import OnboardingPage from './features/onboarding/OnboardingPage'
+import { registerNotificationServiceWorker } from './lib/notifications'
+import './tailwind.css'
 import './styles.css'
 
 const queryClient = new QueryClient()
@@ -17,9 +20,12 @@ if (!rootElement) {
   throw new Error('The app root element is missing.')
 }
 
+void registerNotificationServiceWorker().catch(() => undefined)
+
 createRoot(rootElement).render(
   <StrictMode>
-    <AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
@@ -30,6 +36,7 @@ createRoot(rootElement).render(
           </Routes>
         </BrowserRouter>
       </QueryClientProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 )

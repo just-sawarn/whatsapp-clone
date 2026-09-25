@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import { initializeIdentity } from '../../lib/crypto/keyStore'
+import { initializeIdentity, unlockStoredIdentity } from '../../lib/crypto/keyStore'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 
 function getAuthErrorMessage(error: unknown): string {
@@ -80,6 +80,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function unlockEncryption(password: string): Promise<boolean> {
+    setAuthError(null)
+    if (!session?.user) return false
+    try {
+      return await unlockStoredIdentity(session.user.id, password)
+    } catch (identityError: unknown) {
+      setAuthError(identityError instanceof Error ? identityError.message : 'The password could not unlock this device.')
+      return false
+    }
+  }
+
   const value: AuthContextValue = {
     session,
     user: session?.user ?? null,
@@ -90,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp: (email, password) => runAuthAction(() => supabase ? supabase.auth.signUp({ email, password }) : Promise.resolve({ error: new Error('Supabase is not configured.') })),
     resetPassword: (email) => runAuthAction(() => supabase ? supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }) : Promise.resolve({ error: new Error('Supabase is not configured.') })),
     initializeEncryption,
+    unlockEncryption,
     signOut: async () => {
       if (!supabase) return
       const { error } = await supabase.auth.signOut()
