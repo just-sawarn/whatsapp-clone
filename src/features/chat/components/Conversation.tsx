@@ -61,9 +61,7 @@ export function Conversation({ chatId }: { chatId: string }) {
   const [infoOpen, setInfoOpen] = useState(false)
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null)
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
-  const [viewer, setViewer] = useState<{ url: string; name: string } | null>(
-    null,
-  )
+  const [viewer, setViewer] = useState<ChatMessage | null>(null)
   const [dragging, setDragging] = useState(false)
 
   useMarkRead(
@@ -230,8 +228,7 @@ export function Conversation({ chatId }: { chatId: string }) {
                 void messageActions.removeForEveryone(message),
               onRetry: retry,
               onDiscard: discard,
-              onOpenImage: (message, url) =>
-                setViewer({ url, name: message.media?.name ?? 'Photo' }),
+              onOpenImage: setViewer,
             }}
           />
         )}
@@ -290,11 +287,7 @@ export function Conversation({ chatId }: { chatId: string }) {
         }}
       />
       {viewer && (
-        <MediaViewer
-          url={viewer.url}
-          name={viewer.name}
-          onClose={() => setViewer(null)}
-        />
+        <MediaViewer message={viewer} onClose={() => setViewer(null)} />
       )}
     </div>
   )

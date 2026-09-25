@@ -25,6 +25,7 @@ import {
 } from '../../lib/crypto/keyStore'
 import { appUrl } from '../../lib/appUrl'
 import { clearCache } from '../../lib/messageCache'
+import { clearStoredMedia } from '../../lib/mediaStore'
 import {
   clearLogin,
   ensureLoginRecorded,
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearLogin(id)
         await clearCache(id).catch(() => undefined)
       }
+      await clearStoredMedia()
       queryClient.clear()
       setSessionNotice(notice)
       if (!supabase) return

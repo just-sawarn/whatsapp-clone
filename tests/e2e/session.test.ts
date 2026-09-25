@@ -152,6 +152,11 @@ describe('logging out', () => {
     const carol = await newPerson(browser, 'carol')
     await onboard(carol, 'Carol Chen')
     expect(await rememberedKeyCount(carol.page)).toBe(1)
+    // Pictures kept on the device for speed must not outlive the login.
+    await carol.page.evaluate(async () => {
+      for (const name of ['chatbit-images-v1', 'chatbit-cipher-v1'])
+        await (await caches.open(name)).put('/seed', new Response('x'))
+    })
     await carol.page
       .getByRole('link', { name: 'Settings', exact: true })
       .click()
@@ -161,6 +166,14 @@ describe('logging out', () => {
       .click()
     await waitForPath(carol.page, '/auth')
     expect(await rememberedKeyCount(carol.page)).toBe(0)
+    expect(
+      await carol.page.evaluate(async () =>
+        (await caches.keys()).filter(
+          (name) =>
+            name.startsWith('chatbit-i') || name.startsWith('chatbit-c'),
+        ),
+      ),
+    ).toEqual([])
     // The stored Supabase session is gone too (the test context re-seeds it on load, so check it directly).
     expect(
       await carol.page.evaluate(() =>

@@ -1,5 +1,6 @@
 import { avatarPalette } from '../../design/tokens'
-import { buckets, useSignedUrl } from '../../lib/storageUrls'
+import { SMALL_IMAGE_MAX_SIZE, useBucketImage } from '../../lib/bucketImage'
+import { buckets } from '../../lib/storageUrls'
 import { cn } from '../../lib/cn'
 
 type AvatarProps = {
@@ -42,7 +43,9 @@ export function Avatar({
   className,
 }: AvatarProps) {
   const rounding = shape === 'square' ? 'rounded-[28%]' : 'rounded-full'
-  const { data: url } = useSignedUrl(bucket, path)
+  const { url } = useBucketImage(bucket, path, {
+    small: size <= SMALL_IMAGE_MAX_SIZE,
+  })
   return (
     <span
       className={cn('relative inline-block shrink-0', className)}
@@ -53,7 +56,8 @@ export function Avatar({
           src={url}
           alt=""
           className={cn('h-full w-full object-cover', rounding)}
-          loading="lazy"
+          decoding="async"
+          draggable={false}
         />
       ) : (
         <span

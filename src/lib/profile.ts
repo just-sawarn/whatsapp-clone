@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { resizeImage } from './image'
+import { removePhotoFiles, uploadPhoto } from './photoUpload'
 import { buckets } from './storageUrls'
 import { getStoredPublicKey } from './crypto/keyStore'
 
@@ -162,16 +162,11 @@ export async function uploadAvatar(
   if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
   if (file.size > MAX_AVATAR_SOURCE_BYTES)
     throw new Error('That image is larger than 8 MB.')
-  const { blob } = await resizeImage(file, 512, 0.88)
   const path = `${userId}/${crypto.randomUUID()}.jpg`
   const storage = client().storage.from(buckets.avatars)
-  const { error } = await storage.upload(path, blob, {
-    contentType: 'image/jpeg',
-    cacheControl: '3600',
-  })
-  if (error) throw error
+  await uploadPhoto(storage, path, file)
   await updateAvatarPath(userId, path)
-  if (previousPath) await storage.remove([previousPath])
+  if (previousPath) await removePhotoFiles(storage, previousPath)
   return path
 }
 
@@ -191,7 +186,7 @@ export async function removeAvatar(
   path: string,
 ): Promise<void> {
   await updateAvatarPath(userId, null)
-  await client().storage.from(buckets.avatars).remove([path])
+  await removePhotoFiles(client().storage.from(buckets.avatars), path)
 }
 
 /** Best effort: the tab may be closing, so failures are ignored. */

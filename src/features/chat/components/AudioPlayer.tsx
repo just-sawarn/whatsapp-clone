@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, Pause, Play } from 'lucide-react'
+import { Download, Mic, Pause, Play } from 'lucide-react'
 import { Icon } from '../../../components/ui/Icon'
 import { Spinner } from '../../../components/ui/Spinner'
 import { formatDuration } from '../../../lib/format'
-import { useMediaUrl } from '../useMediaUrl'
+import { useNearViewport } from '../../../lib/useNearViewport'
+import { useMediaBlob } from '../useMediaBlob'
+import { useSaveMedia } from '../useSaveMedia'
 import type { ChatMessage } from '../types'
 
 const speeds = [1, 1.5, 2] as const
 
 /** Voice-note player: play/pause, a scrub bar bound to real playback position, duration, and speed. */
 export function AudioPlayer({ message }: { message: ChatMessage }) {
-  const { data: url, isPending, error } = useMediaUrl(message)
+  const [ref, near] = useNearViewport<HTMLDivElement>()
+  const { url, isPending, error } = useMediaBlob(message, 'full', near)
+  const { save, saving } = useSaveMedia(message)
   const audio = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
@@ -29,7 +33,7 @@ export function AudioPlayer({ message }: { message: ChatMessage }) {
   }
 
   return (
-    <div className="flex min-w-[220px] items-center gap-2.5 py-1">
+    <div ref={ref} className="flex min-w-[220px] items-center gap-2.5 py-1">
       <button
         type="button"
         onClick={toggle}
@@ -76,6 +80,16 @@ export function AudioPlayer({ message }: { message: ChatMessage }) {
         </div>
       </div>
       <Icon icon={Mic} size={16} className="text-muted" />
+      <button
+        type="button"
+        onClick={() => void save()}
+        disabled={saving || Boolean(error)}
+        aria-label="Download voice message"
+        title="Download"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-hover disabled:opacity-40"
+      >
+        {saving ? <Spinner size={14} /> : <Icon icon={Download} size={16} />}
+      </button>
       {url && (
         <audio
           ref={audio}

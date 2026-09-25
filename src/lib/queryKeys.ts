@@ -11,7 +11,8 @@ export const keys = {
   contacts: (userId: string) => ['contacts', userId] as const,
   statuses: (userId: string) => ['statuses', userId] as const,
   calls: (userId: string) => ['calls', userId] as const,
-  media: (messageId: string) => ['media', messageId] as const,
+  media: (messageId: string, variant: string = 'full') =>
+    ['media', messageId, variant] as const,
   communities: (userId: string) => ['communities', userId] as const,
   communityGroups: (communityId: string) =>
     ['community-groups', communityId] as const,

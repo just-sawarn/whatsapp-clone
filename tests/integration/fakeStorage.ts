@@ -109,6 +109,31 @@ export async function handleStorage(
     .map(decodeURIComponent)
   const method = request.method ?? 'GET'
 
+  // Several signed URLs at once (`createSignedUrls`): POST /object/sign/{bucket} with { paths }.
+  if (method === 'POST' && parts[0] === 'sign' && parts.length === 2) {
+    const { paths } = JSON.parse((await readBody(request)).toString()) as {
+      paths: string[]
+    }
+    const bucket = parts[1] ?? ''
+    send(
+      response,
+      200,
+      paths.map((path) => {
+        const key = keyOf(bucket, path)
+        if (!objects.has(key))
+          return { error: 'Object not found', path, signedURL: null }
+        const token = randomUUID()
+        tokens.set(token, key)
+        return {
+          error: null,
+          path,
+          signedURL: `/object/sign/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}?token=${token}`,
+        }
+      }),
+    )
+    return true
+  }
+
   // Signed URL for a later GET (the client draws avatars and status photos from these).
   if (method === 'POST' && parts[0] === 'sign') {
     const key = keyOf(parts[1] ?? '', parts.slice(2).join('/'))

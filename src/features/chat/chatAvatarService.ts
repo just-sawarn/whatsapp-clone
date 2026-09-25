@@ -1,4 +1,5 @@
-import { photoRejection, resizeImage } from '../../lib/image'
+import { photoRejection } from '../../lib/image'
+import { removePhotoFiles, uploadPhoto } from '../../lib/photoUpload'
 import { buckets } from '../../lib/storageUrls'
 import { supabase } from '../../lib/supabase'
 
@@ -33,21 +34,17 @@ export async function uploadChatAvatar(
 ): Promise<string> {
   const problem = photoRejection(file)
   if (problem) throw new Error(problem)
-  const { blob } = await resizeImage(file, 512, 0.88)
   const path = `${chatId}/${crypto.randomUUID()}.jpg`
   const storage = client().storage.from(buckets.chatAvatars)
-  const { error } = await storage.upload(path, blob, {
-    contentType: 'image/jpeg',
-    cacheControl: '3600',
-  })
-  if (error) throw error
+  await uploadPhoto(storage, path, file)
   try {
     await setAvatarPath(chatId, path)
   } catch (updateError) {
-    await storage.remove([path]).catch(() => undefined)
+    await removePhotoFiles(storage, path).catch(() => undefined)
     throw updateError
   }
-  if (previousPath) await storage.remove([previousPath]).catch(() => undefined)
+  if (previousPath)
+    await removePhotoFiles(storage, previousPath).catch(() => undefined)
   return path
 }
 
@@ -56,8 +53,8 @@ export async function removeChatAvatar(
   path: string,
 ): Promise<void> {
   await setAvatarPath(chatId, null)
-  await client()
-    .storage.from(buckets.chatAvatars)
-    .remove([path])
-    .catch(() => undefined)
+  await removePhotoFiles(
+    client().storage.from(buckets.chatAvatars),
+    path,
+  ).catch(() => undefined)
 }

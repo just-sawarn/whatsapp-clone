@@ -32,8 +32,13 @@ afterAll(async () => {
   await closePool()
 })
 
-const chatPhotos = async () =>
+const chatFiles = async () =>
   (await storedFiles()).filter((file) => file.key.startsWith('chat-avatars/'))
+/** Photos only: every photo also has a 128 px copy beside it (`x.s.jpg`), counted separately. */
+const chatPhotos = async () =>
+  (await chatFiles()).filter((file) => !file.key.endsWith('.s.jpg'))
+const smallCopies = async () =>
+  (await chatFiles()).filter((file) => file.key.endsWith('.s.jpg'))
 const png = (colour: [number, number, number] = [30, 144, 255]) => ({
   name: 'photo.png',
   mimeType: 'image/png',
@@ -102,6 +107,10 @@ describe('group photos', () => {
 
     await panel.getByRole('button', { name: 'Remove photo' }).click()
     await expect.poll(async () => (await chatPhotos()).length).toBe(before - 1)
+    // The small copy goes with its photo.
+    await expect
+      .poll(async () => (await smallCopies()).length)
+      .toBe((await chatPhotos()).length)
     await expect
       .poll(() =>
         page

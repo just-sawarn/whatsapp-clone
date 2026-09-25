@@ -6,6 +6,10 @@ export type MessageMedia = {
   iv: string
   width?: number
   height?: number
+  /** A smaller copy of a photo, stored beside the original and encrypted with the same key (its own IV). */
+  thumb?: { iv: string; width: number; height: number }
+  /** A tiny blurred JPEG (as a data URL) to paint while the photo downloads. */
+  tiny?: string
 }
 
 export type MessagePayloadV1 = {

@@ -40,6 +40,30 @@ const JPEG = 'ffd8ff'
 const PNG = '89504e47'
 const WEBM = '1a45dfa3'
 
+/** Width and height from a JPEG's start-of-frame marker, so a test can tell a 640 px copy from the 1400 px original. */
+function jpegSize(bytes: Buffer): { width: number; height: number } | null {
+  let offset = 2
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) return null
+    const marker = bytes[offset + 1] ?? 0
+    if (
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7)
+    )
+      return {
+        height: bytes.readUInt16BE(offset + 5),
+        width: bytes.readUInt16BE(offset + 7),
+      }
+    offset += 2 + bytes.readUInt16BE(offset + 2)
+  }
+  return null
+}
+
+async function readDownload(download: import('playwright-core').Download) {
+  const { readFileSync } = await import('node:fs')
+  return readFileSync(await download.path())
+}
+
 async function openBobsChat() {
   await reload(bob)
   await bob.page.locator('button', { hasText: 'Alice Adams' }).first().click()
@@ -93,7 +117,10 @@ describe('encrypted attachments', () => {
       .getByRole('dialog', { name: 'Send attachment' })
       .getByRole('button', { name: 'Send', exact: true })
       .click()
-    await page.getByText('notes.txt').waitFor()
+    await page
+      .getByRole('dialog', { name: 'Send attachment' })
+      .waitFor({ state: 'detached' })
+    await page.getByRole('button', { name: /notes\.txt/ }).waitFor()
 
     await expect.poll(async () => (await chatMedia()).length).toBe(before + 1)
     const stored = (await chatMedia()).at(-1)
@@ -136,7 +163,110 @@ describe('encrypted attachments', () => {
     await expect
       .poll(() => bob.page.getByLabel('Seek voice message').isEnabled())
       .toBe(true)
+
+    const download = bob.page.waitForEvent('download')
+    await bob.page
+      .getByRole('button', { name: 'Download voice message' })
+      .click()
+    const saved = await download
+    expect(saved.suggestedFilename()).toMatch(/\.webm$/)
+    // The saved file is the decrypted recording, not the ciphertext in storage.
+    expect((await readDownload(saved)).subarray(0, 4).toString('hex')).toBe(
+      WEBM,
+    )
     expect(alice.errors).toEqual([])
+    expect(bob.errors).toEqual([])
+  })
+})
+
+describe('large photos and downloads', () => {
+  it('sends a bubble-sized copy alongside a big photo and downloads the original from the chat', async () => {
+    const { page } = alice
+    const before = (await chatMedia()).length
+    await page.locator('input[type=file][multiple]').setInputFiles({
+      name: 'big.png',
+      mimeType: 'image/png',
+      buffer: makePng(1400, 900, [40, 120, 200]),
+    })
+    await page
+      .getByRole('dialog', { name: 'Send attachment' })
+      .getByRole('button', { name: 'Send', exact: true })
+      .click()
+    await page.locator('img[alt="big.jpg"]').waitFor()
+    // The photo and its thumbnail are two separate encrypted files.
+    await expect.poll(async () => (await chatMedia()).length).toBe(before + 2)
+    const [photo, thumb] = (await chatMedia()).slice(-2)
+    expect(thumb?.key).toBe(`${photo?.key}.t`)
+    expect(thumb?.head.startsWith(JPEG)).toBe(false)
+    expect(thumb?.size).toBeLessThan(photo?.size ?? 0)
+
+    await openBobsChat()
+    const bubble = bob.page.locator('img[alt="big.jpg"]')
+    await bubble.waitFor()
+    await expect.poll(() => imageLoaded(bubble)).toBe(true)
+    // The bubble shows the small copy, not the 1400 px original.
+    const shown = await bubble.evaluate(
+      (element) => (element as HTMLImageElement).naturalWidth,
+    )
+    expect(shown).toBeLessThanOrEqual(640)
+
+    // Opening it swaps in the full photo.
+    await bubble.click()
+    const viewer = bob.page.getByRole('dialog', { name: 'big.jpg' })
+    const full = viewer.locator('img')
+    await expect
+      .poll(() =>
+        full.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      )
+      .toBe(1400)
+    await shot(bob.page, '44-photo-viewer')
+
+    // Download from the lightbox: the real decrypted 1400 px JPEG under its own name.
+    const fromViewer = bob.page.waitForEvent('download')
+    await viewer.getByRole('button', { name: 'Download photo' }).click()
+    const viewerFile = await fromViewer
+    expect(viewerFile.suggestedFilename()).toBe('big.jpg')
+    const viewerBytes = await readDownload(viewerFile)
+    expect(viewerBytes.subarray(0, 3).toString('hex')).toBe(JPEG)
+    expect(jpegSize(viewerBytes)).toEqual({ width: 1400, height: 900 })
+    await viewer.getByRole('button', { name: 'Close photo' }).click()
+    await viewer.waitFor({ state: 'detached' })
+
+    // Download button on the photo itself.
+    await bubble.hover()
+    const fromBubble = bob.page.waitForEvent('download')
+    await bob.page.getByRole('button', { name: 'Download big.jpg' }).click()
+    const bubbleFile = await fromBubble
+    expect(bubbleFile.suggestedFilename()).toBe('big.jpg')
+    expect(jpegSize(await readDownload(bubbleFile))).toEqual({
+      width: 1400,
+      height: 900,
+    })
+
+    // And from the message menu.
+    await bubble.click({ button: 'right' })
+    const fromMenu = bob.page.waitForEvent('download')
+    await bob.page.getByRole('menuitem', { name: 'Download' }).click()
+    expect((await fromMenu).suggestedFilename()).toBe('big.jpg')
+    expect(alice.errors).toEqual([])
+    expect(bob.errors).toEqual([])
+  })
+
+  it('reopens a chat from the on-device store without downloading the photos again', async () => {
+    const downloads: string[] = []
+    bob.page.on('request', (request) => {
+      if (
+        /\/object\/sign\/chat-media|\/object\/authenticated\/chat-media/.test(
+          request.url(),
+        )
+      )
+        downloads.push(request.url())
+    })
+    await openBobsChat()
+    const bubble = bob.page.locator('img[alt="big.jpg"]')
+    await bubble.waitFor()
+    await expect.poll(() => imageLoaded(bubble)).toBe(true)
+    expect(downloads).toEqual([])
     expect(bob.errors).toEqual([])
   })
 })
@@ -149,7 +279,7 @@ describe('profile and status photos', () => {
     await page.locator('input[type=file]').setInputFiles({
       name: 'me.png',
       mimeType: 'image/png',
-      buffer: makePng(120, 120, [90, 60, 200]),
+      buffer: makePng(600, 600, [90, 60, 200]),
     })
     await page.getByText('Profile photo updated.').waitFor()
     const rail = page.getByRole('link', { name: 'Your profile' }).locator('img')
@@ -159,6 +289,37 @@ describe('profile and status photos', () => {
       file.key.startsWith('avatars/'),
     )
     expect(stored.at(-1)?.head.startsWith(JPEG)).toBe(true)
+    // Lists and the nav rail use a 128 px copy stored beside the 512 px photo.
+    expect(stored.length).toBeGreaterThanOrEqual(2)
+    expect(
+      await rail.evaluate(
+        (element) => (element as HTMLImageElement).naturalWidth,
+      ),
+    ).toBe(128)
+    expect(alice.errors).toEqual([])
+  })
+
+  it('shows the profile photo after a reload without asking storage again', async () => {
+    const { page } = alice
+    const signs: string[] = []
+    page.on('request', (request) => {
+      if (/\/object\/sign\/avatars/.test(request.url()))
+        signs.push(request.url())
+    })
+    const rail = page.getByRole('link', { name: 'Your profile' }).locator('img')
+    await reload(alice)
+    await rail.waitFor()
+    await expect.poll(() => imageLoaded(rail)).toBe(true)
+    expect(signs).toEqual([])
+
+    // With the on-device store emptied the same reload has to ask, so the check above can fail.
+    await page.evaluate(async () => {
+      for (const name of await caches.keys()) await caches.delete(name)
+    })
+    await reload(alice)
+    await rail.waitFor()
+    await expect.poll(() => imageLoaded(rail)).toBe(true)
+    expect(signs.length).toBeGreaterThan(0)
     expect(alice.errors).toEqual([])
   })
 
@@ -190,6 +351,47 @@ describe('profile and status photos', () => {
       ),
     ).toBe(true)
     await shot(page, '43-photo-status')
+    expect(alice.errors).toEqual([])
+  })
+
+  it('has the next status photo ready before it is tapped', async () => {
+    const { page } = alice
+    await page.getByRole('button', { name: 'Close status' }).click()
+    await page.getByRole('button', { name: 'Add status' }).click()
+    await page.getByRole('menuitem', { name: 'Photo status' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('input[type=file]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: makePng(160, 100, [200, 80, 60]),
+    })
+    await dialog.getByLabel('Caption').fill('Second view')
+    await dialog.getByRole('button', { name: 'Post status' }).click()
+    await page
+      .getByText('Status posted. It disappears after 24 hours.')
+      .waitFor()
+
+    const signs: string[] = []
+    page.on('request', (request) => {
+      if (
+        /\/object\/sign\/status-media/.test(request.url()) &&
+        request.method() === 'POST'
+      )
+        signs.push(request.url())
+    })
+    await page.getByRole('button', { name: /My status/ }).click()
+    const viewer = page.getByRole('dialog', { name: /Alice Adams's status/ })
+    const first = viewer.locator('img[alt="Nice view"]')
+    await first.waitFor()
+    await expect.poll(() => imageLoaded(first)).toBe(true)
+    // Let the background fetch of the following photo finish, then move on.
+    await page.waitForTimeout(600)
+    const asked = signs.length
+    await viewer.getByRole('button', { name: 'Next update' }).click()
+    const second = viewer.locator('img[alt="Second view"]')
+    await second.waitFor()
+    await expect.poll(() => imageLoaded(second)).toBe(true)
+    expect(signs.length).toBe(asked)
     expect(alice.errors).toEqual([])
   })
 })

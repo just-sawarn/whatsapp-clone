@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Ban,
   ChevronDown,
+  Download,
   Forward,
   RotateCcw,
   Smile,
@@ -15,6 +16,7 @@ import { Ticks, type TickStatus } from '../../../components/ui/Ticks'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { canDeleteForEveryone } from '../messageService'
+import { useSaveMedia } from '../useSaveMedia'
 import { segmentText } from '../linkPreview'
 import type { ChatMessage, ReactionRow } from '../types'
 import { LinkPreviewCard } from './LinkPreviewCard'
@@ -32,7 +34,7 @@ export type BubbleActions = {
   onDeleteForEveryone: (message: ChatMessage) => void
   onRetry: (id: string) => void
   onDiscard: (id: string) => void
-  onOpenImage: (message: ChatMessage, url: string) => void
+  onOpenImage: (message: ChatMessage) => void
   onJump: (id: string) => void
 }
 
@@ -102,6 +104,7 @@ export function MessageBubble(props: Props) {
   const canInteract = !message.deleted && message.sendState === 'sent'
   const myReaction = reactions.find((reaction) => reaction.userId === me)?.emoji
 
+  const download = useSaveMedia(message)
   const items: MenuItem[] = [
     {
       label: 'Reply',
@@ -125,6 +128,16 @@ export function MessageBubble(props: Props) {
       onSelect: () => void navigator.clipboard.writeText(message.text),
       disabled: !message.text || message.deleted,
     },
+    ...(message.media
+      ? [
+          {
+            label: 'Download',
+            icon: Download,
+            onSelect: () => void download.save(),
+            disabled: !download.canSave || message.undecryptable,
+          },
+        ]
+      : []),
     {
       label: 'Delete for me',
       onSelect: () => props.onDeleteForMe(message),

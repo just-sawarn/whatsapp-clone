@@ -8,7 +8,7 @@ ChatBit is a private, end-to-end encrypted messenger for the web. React 18 + Vit
 | --- | --- |
 | Accounts | Email/password sign-up with strength meter, email verification, password reset, animated multi-step onboarding (photo, name, `@username`, about, permissions priming, key generation) |
 | Chat | 1:1 and group chats, realtime delivery, sent/delivered/read ticks, typing and online/last-seen, unread badges, pin (max 3) / archive / mute / mark unread, filters, chat and message search |
-| Messages | Text, photos, files, voice notes (live waveform), emoji, reply, forward, delete for me / for everyone (1 hour), star, reactions, link previews, drag-and-drop and paste |
+| Messages | Text, photos, files, voice notes (live waveform), emoji, reply, forward, delete for me / for everyone (1 hour), star, reactions, link previews, drag-and-drop and paste, download any photo, voice note or file (decrypted, under its original name) |
 | Groups | Create from usernames with an optional photo, add/remove members, admins, rename, group photo (admins), leave (admin hands over automatically), 256 members |
 | Communities | An announcements group only admins can post in, plus linked groups members can join; photo, description, invite links, member management, leave/deactivate; all messages end-to-end encrypted |
 | Contacts | Discovery by exact `@username` or email (server-enforced privacy setting), contact list, blocking |
@@ -32,6 +32,22 @@ This is real encryption but a simplified scheme: **no forward secrecy or ratchet
 - **Not encrypted:** message metadata (who, when, which chat, message type), reactions, statuses (text and photos), and profile fields. Link previews are fetched server-side (the function sees the URL, not your message) and then embedded in the encrypted message.
 - **Call signalling** runs over a Realtime broadcast channel named by an unguessable call id; media is protected by WebRTC's DTLS-SRTP. It is not tied to your identity keys.
 - **Presence** is broadcast to signed-in users on one channel; if you hide last seen you neither publish nor see it.
+
+## Media loading
+
+Pictures are the heaviest thing the app loads, so they are handled in layers:
+
+- **One request for many pictures.** Private buckets are read through signed URLs; the ones a screen needs at the same moment (a chat list of avatars) are requested from Storage in a single call.
+- **Small copies for lists.** Profile, group and community photos are uploaded as a 512 px photo plus a 128 px copy beside it (`name.s.jpg`); avatars at 64 px or less use the small one. Photos uploaded before this existed still work (they use the full photo).
+- **Fetched once, kept on the device.** Signed URLs change every time, so the browser's own cache cannot reuse them. Instead avatars and status photos are kept in the browser's Cache Storage, and chat attachments are kept **still encrypted** (only files under 1 MB, at most 150). Nothing decrypted is written to disk. Everything is wiped on logout.
+- **Chat photos have a bubble-sized copy.** Photos over 640 px are sent with a 640 px thumbnail (encrypted with the same message key, stored as `<file>.t`) and a tiny blurred placeholder inside the encrypted message. The bubble shows the placeholder, then the thumbnail; the full photo is downloaded only when opened or saved. Old messages without a thumbnail load the photo itself.
+- **Only what is near the screen.** Attachments start downloading when their bubble is within a screenful of the viewport, not when the chat opens.
+- **Statuses** hold the timer until the photo is on screen and fetch the next two photos while the current one plays.
+- **Memory.** Object URLs are released shortly after nothing shows them, and photos you sent are kept in memory up to 48 MB.
+
+## Downloading media
+
+Every photo, voice note and file in a chat can be saved: a download button on photos (hover, or always visible on touch screens), one on voice notes, the whole row for files, a button in the full-screen photo viewer, and **Download** in the message menu. The file is decrypted in the browser and saved under its original name, so the server never sees it in the clear.
 
 ## What the browser can and cannot hide
 
@@ -152,7 +168,7 @@ Upload the contents of `dist/`, including `.htaccess` and `sw.js`, to `public_ht
 | Group size limit | 256 (enforced in the database) |
 | Message retention | Kept until deleted; no auto-delete |
 | Delete for everyone window | 1 hour (enforced in the database; content is wiped, not just flagged) |
-| Attachment limit | 16 MB per file (photos are downscaled to 2048 px first); 10 minute voice notes |
+| Attachment limit | 16 MB per file (photos are downscaled to 2048 px first, with a 640 px thumbnail beside them); 10 minute voice notes |
 | Wallpapers | Five built-in colourways; no uploads |
 
 ## Project layout

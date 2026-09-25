@@ -1,7 +1,9 @@
 import { decryptBytes } from '../../lib/crypto/crypto'
+import { readStored, writeStored } from '../../lib/mediaStore'
 import { supabase } from '../../lib/supabase'
 import { buckets } from '../../lib/storageUrls'
 import type { ReceiptRow } from './receipts'
+import { thumbPathFor } from './thumbnails'
 import type { ChatMessage, ReactionRow } from './types'
 
 function client() {
@@ -79,19 +81,46 @@ export async function loadReceipts(
 }
 
 /** Downloads the encrypted attachment and decrypts it in the browser with the message key. */
-export async function downloadMedia(message: ChatMessage): Promise<Blob> {
-  if (!message.media || !message.messageKey)
-    throw new Error('This attachment cannot be decrypted on this device.')
+export type MediaVariant = 'full' | 'thumb'
+
+/** The encrypted bytes for one stored file. Small ones are kept on the device (still encrypted) between visits. */
+async function fetchCiphertext(path: string): Promise<ArrayBuffer> {
+  const key = `${buckets.chatMedia}/${path}`
+  const stored = await readStored('cipher', key)
+  if (stored) return stored.arrayBuffer()
   const { data, error } = await client()
     .storage.from(buckets.chatMedia)
-    .download(message.media.path)
+    .download(path)
   if (error) throw error
+  await writeStored('cipher', key, data)
+  return data.arrayBuffer()
+}
+
+/**
+ * Downloads and decrypts an attachment. `thumb` is the bubble-sized copy of a photo; it falls back to the original
+ * for photos sent without one.
+ */
+export async function downloadMedia(
+  message: ChatMessage,
+  variant: MediaVariant = 'full',
+): Promise<Blob> {
+  const media = message.media
+  if (!media || !message.messageKey)
+    throw new Error('This attachment cannot be decrypted on this device.')
+  if (variant === 'thumb' && media.thumb) {
+    const bytes = await decryptBytes(
+      await fetchCiphertext(thumbPathFor(media.path)),
+      media.thumb.iv,
+      message.messageKey,
+    )
+    return new Blob([bytes], { type: 'image/jpeg' })
+  }
   const bytes = await decryptBytes(
-    await data.arrayBuffer(),
-    message.media.iv,
+    await fetchCiphertext(media.path),
+    media.iv,
     message.messageKey,
   )
-  return new Blob([bytes], { type: message.media.mime })
+  return new Blob([bytes], { type: media.mime })
 }
 
 export async function loadStarredIds(userId: string): Promise<string[]> {

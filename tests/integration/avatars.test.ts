@@ -24,6 +24,7 @@ vi.mock('../../src/lib/image', async (importOriginal) => {
 })
 
 import { initializeIdentity } from '../../src/lib/crypto/keyStore'
+import { smallVariantPath } from '../../src/lib/bucketImage'
 import { createProfile } from '../../src/lib/profile'
 import {
   createGroupChat,
@@ -115,6 +116,10 @@ describe('group photos', () => {
     }
     const objects = await stored()
     expect(objects.map((item) => item.key)).toContain(`chat-avatars/${path}`)
+    // A 128 px copy is stored beside it, for lists and headers.
+    expect(objects.map((item) => item.key)).toContain(
+      `chat-avatars/${smallVariantPath(path)}`,
+    )
   })
 
   it('replaces the photo and deletes the old file', async () => {
@@ -127,6 +132,8 @@ describe('group photos', () => {
     const keys = (await stored()).map((item) => item.key)
     expect(keys).toContain(`chat-avatars/${second}`)
     expect(keys).not.toContain(`chat-avatars/${first}`)
+    expect(keys).not.toContain(`chat-avatars/${smallVariantPath(first ?? '')}`)
+    expect(keys).toContain(`chat-avatars/${smallVariantPath(second)}`)
   })
 
   it('does not let a member change it, and cleans up the file it uploaded', async () => {
@@ -158,9 +165,9 @@ describe('group photos', () => {
       (await loadChatOverview(alice.id)).find((item) => item.id === groupId)
         ?.avatarPath,
     ).toBeNull()
-    expect((await stored()).map((item) => item.key)).not.toContain(
-      `chat-avatars/${current}`,
-    )
+    const keys = (await stored()).map((item) => item.key)
+    expect(keys).not.toContain(`chat-avatars/${current}`)
+    expect(keys).not.toContain(`chat-avatars/${smallVariantPath(current)}`)
   })
 
   it('rejects files that are not photos before uploading anything', async () => {

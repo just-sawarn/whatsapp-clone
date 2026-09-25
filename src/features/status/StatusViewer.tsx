@@ -8,7 +8,8 @@ import { useToast } from '../../components/ui/ToastContext'
 import { errorMessage } from '../../lib/errors'
 import { formatClock } from '../../lib/format'
 import { keys } from '../../lib/queryKeys'
-import { buckets, useSignedUrl } from '../../lib/storageUrls'
+import { prefetchBucketImage, useBucketImage } from '../../lib/bucketImage'
+import { buckets } from '../../lib/storageUrls'
 import { useCurrentUserId } from '../auth/useCurrentUser'
 import {
   firstUnviewedIndex,
@@ -21,16 +22,34 @@ import { StatusViewersModal } from './StatusViewersModal'
 const DURATION_MS = 5500
 const TICK_MS = 50
 
-function Content({ item }: { item: StatusItem }) {
-  const { data: url } = useSignedUrl(buckets.statusMedia, item.mediaPath)
+function Content({
+  item,
+  onSettled,
+}: {
+  item: StatusItem
+  onSettled: (id: string) => void
+}) {
+  const { url, error } = useBucketImage(buckets.statusMedia, item.mediaPath)
+  // A photo that failed to load must not hold the story still forever.
+  useEffect(() => {
+    if (error) onSettled(item.id)
+  }, [error, item.id, onSettled])
   if (item.mediaPath) {
     return (
       <div className="grid h-full w-full place-items-center">
-        {url && (
+        {url ? (
           <img
             src={url}
             alt={item.caption ?? 'Status photo'}
+            decoding="async"
             className="max-h-full max-w-full object-contain"
+            onLoad={() => onSettled(item.id)}
+          />
+        ) : (
+          <div
+            role="status"
+            aria-label="Loading status"
+            className="h-9 w-9 animate-spin rounded-full border-2 border-white/25 border-t-white"
           />
         )}
         {item.caption && (
@@ -66,9 +85,12 @@ export function StatusViewer({ group, onClose, onFinished }: Props) {
   const [progress, setProgress] = useState(0)
   const [held, setHeld] = useState(false)
   const [viewersFor, setViewersFor] = useState<string | null>(null)
+  const [settledId, setSettledId] = useState<string | null>(null)
   const marked = useRef(new Set<string>())
   const item = group.items[Math.min(index, group.items.length - 1)]
-  const paused = held || viewersFor !== null
+  // The timer waits for a photo to be on screen, so a slow connection does not skip the update unseen.
+  const waitingForPhoto = Boolean(item?.mediaPath) && settledId !== item?.id
+  const paused = held || viewersFor !== null || waitingForPhoto
 
   const next = useCallback(() => {
     setProgress(0)
@@ -85,6 +107,14 @@ export function StatusViewer({ group, onClose, onFinished }: Props) {
     setProgress(0)
     setIndex((current) => Math.max(0, current - 1))
   }, [])
+
+  // Fetch the following photos while this one plays, so tapping forward shows them at once.
+  const following = group.items.slice(index + 1, index + 3)
+  const followingPaths = following.map((entry) => entry.mediaPath).join('|')
+  useEffect(() => {
+    for (const path of followingPaths.split('|'))
+      prefetchBucketImage(queryClient, buckets.statusMedia, path)
+  }, [followingPaths, queryClient])
 
   useEffect(() => {
     if (paused || !item) return
@@ -187,7 +217,7 @@ export function StatusViewer({ group, onClose, onFinished }: Props) {
         onPointerUp={() => setHeld(false)}
         onPointerLeave={() => setHeld(false)}
       >
-        <Content item={item} />
+        <Content item={item} onSettled={setSettledId} />
         <button
           type="button"
           aria-label="Previous update"

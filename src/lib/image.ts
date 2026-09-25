@@ -2,7 +2,7 @@ export type ResizedImage = { blob: Blob; width: number; height: number }
 
 /** Scales an image down so its longest side is at most `maxSide`, re-encoding as JPEG (or keeping small GIF/WebP). */
 export async function resizeImage(
-  file: File,
+  file: Blob,
   maxSide: number,
   quality = 0.85,
 ): Promise<ResizedImage> {
@@ -49,4 +49,14 @@ export function photoRejection(file: File): string | null {
   if (file.size > MAX_PHOTO_SOURCE_BYTES)
     return 'That image is larger than 8 MB.'
   return null
+}
+
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () =>
+      reject(reader.error ?? new Error('Could not read the image.'))
+    reader.readAsDataURL(blob)
+  })
 }

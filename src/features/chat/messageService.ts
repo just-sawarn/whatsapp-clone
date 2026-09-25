@@ -1,6 +1,7 @@
 import type { MessagePayloadV1 } from '../../lib/crypto/crypto'
 import { encryptBytes } from '../../lib/crypto/crypto'
 import { getStoredPublicKey } from '../../lib/crypto/keyStore'
+import type { ResizedImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { buckets } from '../../lib/storageUrls'
 import type { LinkPreview } from './linkPreview'
@@ -13,6 +14,7 @@ import {
   type Recipient,
 } from './messageCrypto'
 import { downloadMedia } from './messageExtras'
+import { makeThumbnails, thumbPathFor } from './thumbnails'
 import type { ChatMessage, MessageKind } from './types'
 
 export const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024
@@ -89,6 +91,9 @@ export type Attachment = {
   width?: number
   height?: number
   durationSeconds?: number
+  /** Bubble-sized copy of a photo and a tiny placeholder, made before sending (see `makeThumbnails`). */
+  thumb?: ResizedImage
+  tiny?: string
 }
 
 export type OutgoingMessage = {
@@ -169,6 +174,29 @@ export async function sendMessage(
         width: attachment.width,
         height: attachment.height,
       }
+      if (attachment.thumb) {
+        // Same message key, its own IV: the thumbnail is as private as the photo.
+        const sealedThumb = await encryptBytes(
+          await attachment.thumb.blob.arrayBuffer(),
+          messageKey,
+        )
+        const { error: thumbError } = await client()
+          .storage.from(buckets.chatMedia)
+          .upload(
+            thumbPathFor(uploadedPath),
+            new Blob([sealedThumb.data], { type: 'application/octet-stream' }),
+            { contentType: 'application/octet-stream', upsert: false },
+          )
+        // Best effort: without a thumbnail the bubble simply loads the original.
+        if (!thumbError) {
+          payload.media.thumb = {
+            iv: sealedThumb.iv,
+            width: attachment.thumb.width,
+            height: attachment.thumb.height,
+          }
+          if (attachment.tiny) payload.media.tiny = attachment.tiny
+        }
+      }
     }
 
     const sealed = await sealMessage(
@@ -205,7 +233,7 @@ export async function sendMessage(
     if (uploadedPath)
       await client()
         .storage.from(buckets.chatMedia)
-        .remove([uploadedPath])
+        .remove([uploadedPath, thumbPathFor(uploadedPath)])
         .catch(() => undefined)
     throw error
   }
@@ -223,6 +251,10 @@ export async function forwardMessage(
   let attachment: Attachment | undefined
   if (message.media) {
     const blob = await downloadMedia(message)
+    const previews =
+      message.kind === 'image'
+        ? await makeThumbnails(blob, message.media)
+        : null
     attachment = {
       blob,
       name: message.media.name,
@@ -230,6 +262,8 @@ export async function forwardMessage(
       width: message.media.width,
       height: message.media.height,
       durationSeconds: message.media.durationSeconds ?? undefined,
+      thumb: previews?.thumb,
+      tiny: previews?.tiny,
     }
   }
   await sendMessage({
@@ -282,7 +316,7 @@ export async function deleteForEveryone(message: ChatMessage): Promise<void> {
   if (message.media)
     await client()
       .storage.from(buckets.chatMedia)
-      .remove([message.media.path])
+      .remove([message.media.path, thumbPathFor(message.media.path)])
       .catch(() => undefined)
 }
 
